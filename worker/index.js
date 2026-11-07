@@ -40,9 +40,19 @@ const json = (obj, status = 200) =>
 // ---------- Graph API ----------
 const base = (env) => `https://${env.GRAPH_HOST || "graph.instagram.com"}/${env.GRAPH_VERSION || "v23.0"}`;
 
-async function graph(env, path, { method = "GET", body, params = {} } = {}) {
+// Token de la página de Facebook vinculada (hace falta para consultar si alguien te sigue)
+let cachedPageToken = null;
+async function pageToken(env) {
+  if (cachedPageToken) return cachedPageToken;
+  if (!env.PAGE_ID) return null;
+  const r = await graph(env, `/${env.PAGE_ID}`, { params: { fields: "access_token" } });
+  cachedPageToken = r.data?.access_token || null;
+  return cachedPageToken;
+}
+
+async function graph(env, path, { method = "GET", body, params = {}, token } = {}) {
   const url = new URL(base(env) + path);
-  url.searchParams.set("access_token", env.IG_TOKEN);
+  url.searchParams.set("access_token", token || env.IG_TOKEN);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = await fetch(url, {
     method,
@@ -141,9 +151,16 @@ async function deliverIfFollowing(env, senderId, ruleId, user = { id: senderId }
   const rules = await getRules(env);
   const rule = rules.find((r) => r.id === ruleId);
   if (!rule) return;
-  const p = await graph(env, `/${senderId}`, { params: { fields: "is_user_follow_business,username" } });
+  const pt = await pageToken(env);
+  const p = await graph(env, `/${senderId}`, { token: pt || undefined, params: { fields: "is_user_follow_business,username" } });
   console.log("seguimiento", senderId, JSON.stringify(p.data).slice(0, 200));
-  if (p.ok && p.data.is_user_follow_business) {
+  if (!p.ok) {
+    // No se pudo comprobar: no afirmamos que no te sigue; lo reintentamos en la siguiente respuesta
+    await sendMsg(env, { id: senderId }, { text: "No he podido comprobar si me sigues ahora mismo 🙏 Escríbeme otra vez en un momento." });
+    await setPending(env, user, rule.id);
+    return;
+  }
+  if (p.data.is_user_follow_business) {
     await sendMsg(env, { id: senderId }, { text: finalText(rule) });
     await clearPending(env, { id: senderId, username: p.data.username || user.username });
     await clearPending(env, user);
@@ -295,8 +312,9 @@ async function handleApi(request, env, url) {
   // Consulta qué dice Meta sobre si una persona te sigue
   if (url.pathname === "/api/follow" && request.method === "GET") {
     const id = url.searchParams.get("id");
-    const r = await graph(env, `/${id}`, { params: { fields: "name,username,is_user_follow_business,is_business_follow_user,follower_count" } });
-    return json(r.data);
+    const pt = await pageToken(env);
+    const r = await graph(env, `/${id}`, { token: pt || undefined, params: { fields: "name,username,is_user_follow_business,is_business_follow_user,follower_count" } });
+    return json({ conTokenDePagina: !!pt, ...r.data });
   }
 
   // Marca a una persona como pendiente de confirmar que te sigue (útil para pruebas)

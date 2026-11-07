@@ -8,6 +8,7 @@ crons = ["* * * * *"]
 [vars]
 GRAPH_HOST = "graph.facebook.com"
 GRAPH_VERSION = "v23.0"
+PAGE_ID = "952942437892096"
 
 # Después de `npx wrangler kv namespace create RULES`, pega aquí el id que te devuelve:
 [[kv_namespaces]]
