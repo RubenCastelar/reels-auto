@@ -46,9 +46,7 @@
 
   <div class="card hidden" id="conn">
     <h2>Conexión</h2>
-    <label>URL de tu Worker</label>
-    <input type="text" id="api" placeholder="https://reels-auto.TU-USUARIO.workers.dev">
-    <label>Contraseña del panel</label>
+    <label>Contraseña del panel (solo se pide una vez en este dispositivo)</label>
     <input type="password" id="pwd">
     <div class="row" style="margin-top:12px"><button id="save">Guardar y conectar</button></div>
     <div class="msg" id="connMsg"></div>
@@ -105,10 +103,15 @@ const $ = (id) => document.getElementById(id);
 const store = { get:(k)=>{ try { return localStorage.getItem(k) || ""; } catch { return ""; } }, set:(k,v)=>{ try { localStorage.setItem(k,v); } catch {} } };
 let resolved = null, editing = null, rules = [];
 
-$("api").value = store.get("api"); $("pwd").value = store.get("pwd");
+const API = "https://reels-auto.rubirup66.workers.dev"; // no es un secreto
+
+// Acceso rápido: abre el panel con  ...#clave=TU_CONTRASEÑA  (el hash no viaja a ningún servidor)
+const hashKey = new URLSearchParams(location.hash.slice(1)).get("clave");
+if (hashKey) { store.set("pwd", hashKey); history.replaceState(null, "", location.pathname + location.search); }
+$("pwd").value = store.get("pwd");
 
 async function call(path, opts = {}) {
-  const res = await fetch($("api").value.replace(/\/$/, "") + path, {
+  const res = await fetch(API + path, {
     ...opts,
     headers: { Authorization: "Bearer " + $("pwd").value, "Content-Type": "application/json" },
   });
@@ -159,7 +162,7 @@ function render() {
 }
 
 $("save").onclick = async () => {
-  store.set("api", $("api").value.trim()); store.set("pwd", $("pwd").value);
+  store.set("pwd", $("pwd").value);
   try { const me = await call("/api/me"); await load(); say("connMsg", "Conectado como @" + (me.username || "?"), true); show("list"); }
   catch (e) { say("connMsg", e.message, false); show("conn"); }
 };
@@ -206,7 +209,7 @@ $("add").onclick = async () => {
   } catch (e) { say("addMsg", e.message, false); }
 };
 
-if ($("api").value && $("pwd").value) $("save").onclick(); else show("conn");
+if ($("pwd").value) $("save").onclick(); else show("conn");
 </script>
 </body>
 </html>
