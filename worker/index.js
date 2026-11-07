@@ -285,6 +285,20 @@ async function handleApi(request, env, url) {
     return json({ conversations: r.data.data || [] }); // sin paging: evita exponer el token
   }
 
+  // Páginas de Facebook accesibles con el token (sin mostrar sus tokens)
+  if (url.pathname === "/api/pages" && request.method === "GET") {
+    const r = await graph(env, `/me/accounts`, { params: { fields: "id,name,instagram_business_account{id,username}" } });
+    const pages = (r.data?.data || []).map((p) => ({ id: p.id, name: p.name, ig: p.instagram_business_account || null }));
+    return json(r.ok ? { pages } : { error: r.data?.error?.message });
+  }
+
+  // Consulta qué dice Meta sobre si una persona te sigue
+  if (url.pathname === "/api/follow" && request.method === "GET") {
+    const id = url.searchParams.get("id");
+    const r = await graph(env, `/${id}`, { params: { fields: "name,username,is_user_follow_business,is_business_follow_user,follower_count" } });
+    return json(r.data);
+  }
+
   // Marca a una persona como pendiente de confirmar que te sigue (útil para pruebas)
   if (url.pathname === "/api/pending" && request.method === "POST") {
     const b = await request.json();
