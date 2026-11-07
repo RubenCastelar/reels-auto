@@ -96,6 +96,7 @@ async function handleComment(env, v) {
 
   const rules = await getRules(env);
   const rule = rules.find((r) => r.active && r.mediaId === v.media.id && keywordMatches(v.text, r.keyword));
+  console.log("comment", v.media.id, JSON.stringify(v.text), rule ? "match " + rule.id : "sin regla");
   if (!rule) return;
   await env.RULES.put(seen, "1", { expirationTtl: 60 * 60 * 24 * 7 });
 
@@ -153,6 +154,7 @@ async function handleWebhook(request, env, ctx) {
   if (!sig || !safeEqual(sig, expected)) return new Response("bad signature", { status: 401 });
 
   const body = JSON.parse(raw);
+  console.log("webhook", JSON.stringify(body).slice(0, 800));
   ctx.waitUntil(
     (async () => {
       for (const entry of body.entry || []) {
