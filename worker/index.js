@@ -151,7 +151,19 @@ async function handleWebhook(request, env, ctx) {
   const raw = await request.text();
   const sig = (request.headers.get("X-Hub-Signature-256") || "").replace("sha256=", "");
   const expected = await hmacHex(env.APP_SECRET, raw);
-  if (!sig || !safeEqual(sig, expected)) return new Response("bad signature", { status: 401 });
+  const okSig = !!sig && safeEqual(sig, expected);
+  // Diario de depuración: últimos avisos recibidos (sin secretos)
+  try {
+    const dbg = (await env.RULES.get("debug", "json")) || [];
+    let kinds = "";
+    try { const b = JSON.parse(raw); kinds = (b.entry || []).map((e) => [...(e.changes || []).map((c) => c.field), ...(e.messaging || []).map((m) => (m.postback ? "postback" : m.message ? "message" : "otro"))].join("+")).join(","); } catch {}
+    dbg.push({ t: new Date().toISOString(), firmaOk: okSig, recibida: sig.slice(0, 8), calculada: expected.slice(0, 8), bytes: raw.length, tipo: kinds, secretLen: (env.APP_SECRET || "").length });
+    await env.RULES.put("debug", JSON.stringify(dbg.slice(-20)));
+  } catch {}
+  if (!okSig) {
+    console.log("FIRMA INVALIDA", "recibida:", sig.slice(0, 8) || "(vacía)", "calculada:", expected.slice(0, 8), "bytes:", raw.length, "secretLen:", (env.APP_SECRET || "").length);
+    return new Response("bad signature", { status: 401 });
+  }
 
   const body = JSON.parse(raw);
   console.log("webhook", JSON.stringify(body).slice(0, 800));
@@ -181,7 +193,9 @@ async function handleApi(request, env, url) {
     const r = await request.json();
     if (!r.mediaId || !r.keyword || !r.message) return json({ error: "Faltan campos: vídeo, palabra o mensaje" }, 400);
     const rules = await getRules(env);
+    const prev = rules.find((x) => x.id === r.id);
     const rule = {
+      createdAt: r.createdAt || prev?.createdAt || new Date().toISOString(),
       id: r.id || crypto.randomUUID().slice(0, 8),
       mediaId: String(r.mediaId),
       permalink: r.permalink || "",
@@ -226,6 +240,32 @@ async function handleApi(request, env, url) {
     return json({ error: "No he encontrado ese vídeo en tu cuenta" }, 404);
   }
 
+  if (url.pathname === "/api/debug" && request.method === "GET") {
+    return json((await env.RULES.get("debug", "json")) || []);
+  }
+
+  // Lanza la consulta de comentarios ahora mismo (la misma que corre cada minuto)
+  if (url.pathname === "/api/poll" && request.method === "POST") {
+    await pollComments(env);
+    return json({ ok: true });
+  }
+
+  // Lee los comentarios de un vídeo (para comprobar que la API los devuelve)
+  if (url.pathname === "/api/comments" && request.method === "GET") {
+    const mediaId = url.searchParams.get("mediaId");
+    const out = [];
+    let r = await graph(env, `/${mediaId}/comments`, { params: { fields: "id,text,username,timestamp", limit: "50" } });
+    if (!r.ok) return json({ error: r.data?.error?.message || "Error de la API" }, 502);
+    for (let page = 0; page < 5; page++) {
+      for (const c of r.data.data || []) out.push({ id: c.id, text: c.text, username: c.username, timestamp: c.timestamp });
+      const next = r.data.paging?.next;
+      if (!next) break;
+      r = { ok: true, data: await (await fetch(next)).json() }; // el token nunca sale del Worker
+    }
+    out.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+    return json({ total: out.length, comments: out.slice(0, 15) });
+  }
+
   // Estado / activación de la suscripción de la cuenta de Instagram a los avisos (webhooks)
   if (url.pathname === "/api/subscribe") {
     if (request.method === "POST") {
@@ -247,7 +287,30 @@ async function handleApi(request, env, url) {
   return json({ error: "No existe" }, 404);
 }
 
+// ---------- consulta periódica (alternativa a los avisos de Meta) ----------
+// Cada minuto lee los comentarios nuevos de los vídeos con regla activa y los procesa.
+async function pollComments(env) {
+  const rules = (await getRules(env)).filter((r) => r.active && r.createdAt);
+  const week = Date.now() - 6.5 * 24 * 3600 * 1000;
+  for (const rule of rules) {
+    const since = Math.max(Date.parse(rule.createdAt), week);
+    const r = await graph(env, `/${rule.mediaId}/comments`, { params: { fields: "id,text,username,from,timestamp", limit: "50" } });
+    if (!r.ok) { console.log("poll error", rule.id, JSON.stringify(r.data?.error?.message)); continue; }
+    const fresh = (r.data.data || [])
+      .filter((c) => Date.parse(c.timestamp) >= since)
+      .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    for (const c of fresh) {
+      const from = c.from?.id ? c.from : { id: c.username, username: c.username };
+      await handleComment(env, { id: c.id, text: c.text, from, media: { id: rule.mediaId } }).catch((e) => console.log("poll handle", e));
+    }
+  }
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(pollComments(env));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
