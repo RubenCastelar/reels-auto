@@ -440,21 +440,25 @@ async function pollComments(env, rules) {
 // Cloudflare solo permite lanzar una tarea programada por minuto, así que cada ejecución
 // consulta Instagram varias veces seguidas (cada pocos segundos) durante ~50 s.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const POLL_EVERY_MS = 4000;
 async function pollLoop(env) {
   const t0 = Date.now();
   let calls = 0;
-  for (;;) {
+  for (let i = 0; ; i++) {
     const all = await getRules(env);
     const rules = all.filter((r) => r.active && r.createdAt);
     const pend = await getPend(env);
-    const cost = rules.length + (Object.keys(pend).length ? 1 : 0);
-    if (!cost || calls + cost > 34) break; // sin trabajo, o límite de llamadas por ejecución del plan gratuito
+    const waiting = Object.keys(pend).length > 0;
+    // Si hay alguien esperando para pulsar «Ya te sigo», se mira cada 2 s su conversación
+    // y los comentarios cada 4 s; si no, solo comentarios cada 4 s.
+    const doComments = !waiting || i % 2 === 0;
+    const cost = (doComments ? rules.length : 0) + (waiting ? 1 : 0);
+    if (!cost || calls + cost > 42) break; // sin trabajo, o límite de llamadas por ejecución del plan gratuito
     calls += cost;
-    await pollComments(env, rules);
-    await pollConversations(env, pend, all);
-    if (Date.now() - t0 + POLL_EVERY_MS > 52000) break;
-    await sleep(POLL_EVERY_MS);
+    if (doComments) await pollComments(env, rules);
+    if (waiting) await pollConversations(env, pend, all);
+    const gap = waiting ? 2000 : 4000;
+    if (Date.now() - t0 + gap > 52000) break;
+    await sleep(gap);
   }
 }
 
