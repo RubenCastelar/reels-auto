@@ -5,126 +5,167 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reels Auto</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --tx:#1b1f24; --mut:#6b7280; --line:#e5e7eb; --acc:#e1306c; --ok:#16a34a; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --card:#181b21; --tx:#e8eaed; --mut:#9aa0a6; --line:#2a2f37; } }
+  :root {
+    --bg:#f3f4f7; --dot:#cfd3dc; --card:#ffffff; --tx:#1b1f24; --mut:#6b7280; --line:#e2e5ec; --wire:#9aa3b5;
+    --acc:#ff6d5a; --ok:#16a34a; --bad:#dc2626;
+    --pink:#ec4899; --amber:#f59e0b; --blue:#3b82f6; --purple:#8b5cf6; --teal:#14b8a6; --green:#22c55e; --red:#ef4444;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14151a; --dot:#2b2e38; --card:#1f2128; --tx:#e8eaed; --mut:#9aa0a6; --line:#2f323d; --wire:#5b6275; }
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.45 system-ui,-apple-system,sans-serif; }
-  main { max-width:760px; margin:0 auto; padding:20px 16px 60px; }
-  h1 { font-size:22px; margin:8px 0 18px; }
-  h2 { font-size:16px; margin:0 0 12px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
-  label { display:block; font-size:13px; color:var(--mut); margin:12px 0 4px; }
-  input[type=text], input[type=password], textarea { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--tx); font:inherit; }
-  textarea { min-height:80px; resize:vertical; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; min-height:100vh;
+         background-image:radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size:22px 22px; }
+  main { max-width:1220px; margin:0 auto; padding:18px 16px 70px; }
+  header.top { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
+  header.top h1 { font-size:19px; margin:0; display:flex; align-items:center; gap:8px; }
+  .logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,#833ab4,#f09433); display:grid; place-items:center; color:#fff; font-size:16px; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
+
+  button { font:inherit; cursor:pointer; border-radius:9px; padding:8px 13px; border:1px solid var(--line); background:var(--card); color:var(--tx); font-weight:600; }
+  button:hover { border-color:var(--wire); }
+  button.pri { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.pri:hover { filter:brightness(1.05); }
+  button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.small { padding:5px 10px; font-size:12.5px; }
+  button.danger:hover { border-color:var(--bad); color:var(--bad); }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
+  .hidden { display:none !important; }
+  .mut { color:var(--mut); font-size:13px; }
+  .msg { font-size:13px; margin-top:8px; } .ok { color:var(--ok); } .err { color:var(--bad); }
+  label { display:block; font-size:12.5px; color:var(--mut); margin:12px 0 4px; }
+  input[type=text], input[type=password], textarea { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:9px; background:transparent; color:var(--tx); font:inherit; }
+  input:focus, textarea:focus { outline:2px solid color-mix(in srgb, var(--acc) 45%, transparent); border-color:var(--acc); }
+  textarea { min-height:84px; resize:vertical; }
   .row { display:flex; gap:8px; } .row > * { flex:1; }
-  button { padding:10px 14px; border:0; border-radius:8px; background:var(--acc); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
-  button.sec { background:transparent; color:var(--tx); border:1px solid var(--line); }
-  button.small { padding:6px 10px; font-size:13px; }
-  .check { display:flex; align-items:center; gap:8px; margin-top:14px; }
-  .msg { font-size:13px; margin-top:8px; } .ok { color:var(--ok); } .err { color:#dc2626; }
-  .rule { border-top:1px solid var(--line); padding:12px 0; }
-  .rule:first-child { border-top:0; }
-  .tag { display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12px; margin-right:6px; }
-  .mut { color:var(--mut); font-size:13px; word-break:break-all; }
-  details summary { cursor:pointer; color:var(--mut); font-size:13px; margin-top:12px; }
-  .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
-  .tabs button { background:transparent; color:var(--tx); border:1px solid var(--line); }
-  .tabs button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
-  .hidden { display:none; }
-  #search { margin-bottom:8px; }
+  .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:9px 14px; }
+  .stat b { font-size:18px; display:block; }
+
+  /* ===== Flujo de nodos (estilo n8n) ===== */
+  .wf { background:var(--card); border:1px solid var(--line); border-radius:16px; margin-bottom:16px; overflow:hidden; }
+  .wf.paused { opacity:.62; }
+  .wf-head { display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .wf-head .name { font-weight:700; font-size:15px; }
+  .wf-head .meta { color:var(--mut); font-size:12.5px; }
+  .wf-head .sp { margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .badge { background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:2px 10px; font-size:12px; color:var(--mut); }
+  .switch { position:relative; width:38px; height:22px; flex:none; }
+  .switch input { display:none; }
+  .switch span { position:absolute; inset:0; background:var(--line); border-radius:99px; transition:.15s; cursor:pointer; }
+  .switch span::after { content:""; position:absolute; left:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:.15s; }
+  .switch input:checked + span { background:var(--ok); }
+  .switch input:checked + span::after { transform:translateX(16px); }
+
+  .canvas { padding:22px 16px; overflow-x:auto;
+            background-image:radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size:20px 20px; }
+  .flow { display:flex; align-items:center; width:max-content; min-width:100%; }
+  .wire { width:30px; height:2px; background:var(--wire); position:relative; flex:none; }
+  .wire.short { width:20px; }
+  .wire::after { content:""; position:absolute; right:-1px; top:-4px; border-left:7px solid var(--wire); border-top:5px solid transparent; border-bottom:5px solid transparent; }
+  .node { position:relative; width:172px; flex:none; background:var(--card); border:1.5px solid var(--line); border-radius:12px; padding:10px 11px; box-shadow:0 2px 6px rgba(0,0,0,.06); }
+  .node.clickable { cursor:pointer; }
+  .node.clickable:hover { border-color:var(--wire); transform:translateY(-1px); }
+  .node.sel { border-color:var(--acc); box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 28%, transparent); }
+  .node.dim { opacity:.45; border-style:dashed; }
+  .node .nh { display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px; }
+  .node .ico { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; font-size:15px; color:#fff; flex:none; }
+  .node .ns { margin-top:6px; color:var(--mut); font-size:12px; word-break:break-word; line-height:1.35; max-height:3.9em; overflow:hidden; }
+  .node .port { position:absolute; top:50%; width:9px; height:9px; margin-top:-4.5px; border-radius:50%; background:var(--card); border:2px solid var(--wire); }
+  .node .port.l { left:-6px; } .node .port.r { right:-6px; }
+  .c-pink .ico { background:var(--pink); } .c-amber .ico { background:var(--amber); } .c-blue .ico { background:var(--blue); }
+  .c-purple .ico { background:var(--purple); } .c-teal .ico { background:var(--teal); } .c-green .ico { background:var(--green); } .c-red .ico { background:var(--red); }
+  .branch { display:flex; flex-direction:column; gap:14px; }
+  .bi { display:flex; align-items:center; }
+  .tag { font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:99px; margin-right:6px; flex:none; }
+  .tag.yes { background:color-mix(in srgb, var(--ok) 18%, transparent); color:var(--ok); }
+  .tag.no { background:color-mix(in srgb, var(--bad) 18%, transparent); color:var(--bad); }
+  .loop { font-size:11px; color:var(--mut); margin-left:8px; width:70px; }
+
+  .wf-foot { display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--line); flex-wrap:wrap; align-items:center; }
+  .wf-foot .reply { color:var(--mut); font-size:12.5px; flex:1; min-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ===== Editor ===== */
+  .editor { display:grid; grid-template-columns:1fr; gap:14px; }
+  .cfg { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .cfg h3 { margin:0 0 4px; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .check { display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .hint { color:var(--mut); font-size:12.5px; margin-top:6px; }
+
+  @media (max-width:760px) {
+    .flow { flex-direction:column; align-items:stretch; width:auto; }
+    .wire { width:2px; height:22px; margin:0 auto; }
+    .wire::after { right:auto; left:-4px; top:auto; bottom:-1px; border-left:5px solid transparent; border-right:5px solid transparent; border-top:7px solid var(--wire); border-bottom:0; }
+    .wire.short { height:14px; width:2px; }
+    .node { width:100%; } .node .port { display:none; }
+    .branch { gap:10px; } .bi { flex-direction:column; align-items:stretch; }
+    .tag { align-self:flex-start; margin:0 0 4px; }
+    .bi .wire { display:none; }
+    .loop { display:none; }
+  }
 </style>
 </head>
 <body>
 <main>
-  <h1>🎬 Reels Auto</h1>
+  <header class="top">
+    <h1><span class="logo">⚡</span> Reels Auto</h1>
+    <div class="tabs">
+      <button id="tabListBtn" class="on">📋 Automatizaciones <span id="count"></span></button>
+      <button id="tabNewBtn" class="pri">➕ Nueva</button>
+      <button id="tabConnBtn">⚙ Conexión</button>
+    </div>
+  </header>
 
-  <div class="tabs">
-    <button id="tabListBtn" class="on">📋 Mis automatizaciones <span id="count"></span></button>
-    <button id="tabNewBtn">➕ Nueva automatización</button>
-    <button id="tabConnBtn" class="sec">⚙ Conexión</button>
-  </div>
-
-  <div class="card hidden" id="conn">
-    <h2>Conexión</h2>
+  <!-- Conexión -->
+  <div class="card hidden" id="viewConn" style="max-width:520px">
+    <h3 style="margin:0 0 4px">Conexión</h3>
     <label>Contraseña del panel (solo se pide una vez en este dispositivo)</label>
     <input type="password" id="pwd">
-    <div class="row" style="margin-top:12px"><button id="save">Guardar y conectar</button></div>
+    <div class="row" style="margin-top:12px"><button class="pri" id="save">Guardar y conectar</button></div>
     <div class="msg" id="connMsg"></div>
   </div>
 
-  <div class="card hidden" id="tabNew">
-    <h2 id="formTitle">Nueva automatización</h2>
-    <label>URL del reel</label>
-    <div class="row">
-      <input type="text" id="url" placeholder="https://www.instagram.com/reel/XXXXXXXX/" style="flex:3">
-      <button class="sec" id="resolve" style="flex:1">Buscar</button>
-    </div>
-    <div class="msg" id="resolveMsg"></div>
-
-    <label>Palabra que deben comentar</label>
-    <input type="text" id="keyword" placeholder="QUIERO">
-
-    <label>Mensaje que se envía</label>
-    <textarea id="message" placeholder="¡Aquí tienes la guía que te prometí! 🎁"></textarea>
-
-    <label>Enlace que se envía</label>
-    <input type="text" id="link" placeholder="https://...">
-
-    <div class="check"><input type="checkbox" id="follow" checked><label for="follow" style="margin:0;color:var(--tx)">Obligar a seguirme antes de recibirlo</label></div>
-
-    <details>
-      <summary>Opciones avanzadas</summary>
-      <label>Respuestas públicas al comentario (opcional). Escribe una por línea y se elegirá una al azar cada vez</label>
-      <textarea id="publicReply" placeholder="¡Te lo mando por DM! 📩&#10;Listo, revisa tu DM 👀&#10;¡Enviado! Mira tus mensajes 🙌"></textarea>
-      <label>Mensaje previo cuando hay que seguir</label>
-      <textarea id="intro" placeholder="Heyy 👋 vi tu comentario en mi reel (sobre querer el enlace). Solo sígueme y te lo enviaré lo antes posible 🙏"></textarea>
-      <label>Texto del botón (máx. 20 caracteres)</label>
-      <input type="text" id="buttonText" value="Ya te sigo ✅" maxlength="20">
-      <label>Mensaje si todavía no te sigue</label>
-      <input type="text" id="notFollowing" placeholder="Asegúrate de que me sigues para poder enviarte el enlace!">
-    </details>
-
-    <div class="row" style="margin-top:16px">
-      <button id="add">Guardar automatización</button>
-      <button class="sec" id="cancel" style="display:none">Cancelar edición</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="sec" id="saveDef">💾 Guardar estos mensajes como predeterminados</button>
-    </div>
-    <div class="msg mut" id="defMsg">Los mensajes vienen rellenados con tu configuración predeterminada. Cámbialos y pulsa el botón de arriba para que se queden guardados para las próximas.</div>
-    <div class="msg" id="addMsg"></div>
+  <!-- Lista -->
+  <div id="viewList">
+    <div class="stats" id="stats"></div>
+    <input type="text" id="search" placeholder="Buscar por palabra, mensaje o enlace…" class="hidden" style="margin-bottom:14px">
+    <div id="list" class="mut">Pulsa «⚙ Conexión» para conectar y ver tus automatizaciones.</div>
   </div>
 
-  <div class="card" id="tabList">
-    <h2>Mis automatizaciones</h2>
-    <input type="text" id="search" placeholder="Buscar por palabra, mensaje o enlace…" class="hidden">
-    <div id="list" class="mut">Pulsa «⚙ Conexión» para conectar y ver tus automatizaciones.</div>
+  <!-- Editor -->
+  <div id="viewEdit" class="hidden">
+    <div class="wf" style="margin-bottom:14px">
+      <div class="wf-head">
+        <span class="name" id="formTitle">Nueva automatización</span>
+        <span class="meta">Haz clic en cada nodo para configurarlo</span>
+      </div>
+      <div class="canvas"><div id="editFlow"></div></div>
+    </div>
+    <div class="cfg" id="cfg"></div>
+    <div class="row" style="margin-top:14px; max-width:620px">
+      <button class="pri" id="add">Guardar automatización</button>
+      <button id="cancel">Cancelar</button>
+    </div>
+    <div class="row" style="margin-top:8px; max-width:620px">
+      <button id="saveDef">💾 Guardar estos mensajes como predeterminados</button>
+    </div>
+    <div class="msg" id="addMsg"></div>
+    <div class="msg mut" id="defMsg">Los mensajes vienen rellenados con tu configuración predeterminada. Cámbialos y pulsa el botón de arriba para que se queden guardados para las próximas.</div>
   </div>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const store = { get:(k)=>{ try { return localStorage.getItem(k) || ""; } catch { return ""; } }, set:(k,v)=>{ try { localStorage.setItem(k,v); } catch {} } };
-let resolved = null, editing = null, rules = [];
-
 const API = "https://reels-auto.rubirup66.workers.dev"; // no es un secreto
 
-// Textos por defecto (si dejas el campo vacío, se usan estos)
+// Textos de fábrica (si dejas un campo vacío, se usan estos)
 const DEF_INTRO = "Heyy 👋 vi tu comentario en mi reel (sobre querer el enlace). Solo sígueme y te lo enviaré lo antes posible 🙏";
 const DEF_NOFOLLOW = "Asegúrate de que me sigues para poder enviarte el enlace!";
 const DEF_BUTTON = "Ya te sigo ✅";
-// Predeterminados guardados por ti (viven en el servidor); si no hay, se usan los de fábrica
-let saved = {};
-function fillDefaults() {
-  $("intro").value = saved.intro || DEF_INTRO;
-  $("notFollowing").value = saved.notFollowing || DEF_NOFOLLOW;
-  $("buttonText").value = saved.buttonText || DEF_BUTTON;
-  $("message").value = saved.message || "";
-  $("link").value = saved.link || "";
-  $("publicReply").value = saved.publicReply || "";
-  $("follow").checked = saved.requireFollow !== false;
-}
-fillDefaults();
+
+let saved = {}, rules = [], draft = null, sel = "reel";
 
 // Acceso rápido: abre el panel con  ...#clave=TU_CONTRASEÑA  (el hash no viaja a ningún servidor)
 const hashKey = new URLSearchParams(location.hash.slice(1)).get("clave");
@@ -143,58 +184,109 @@ async function call(path, opts = {}) {
 const say = (id, text, ok) => { $(id).textContent = text; $(id).className = "msg " + (ok ? "ok" : "err"); };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 
-function show(tab) {
-  $("tabList").classList.toggle("hidden", tab !== "list");
-  $("tabNew").classList.toggle("hidden", tab !== "new");
-  $("conn").classList.toggle("hidden", tab !== "conn");
-  $("tabListBtn").classList.toggle("on", tab === "list");
-  $("tabNewBtn").classList.toggle("on", tab === "new");
-  $("tabConnBtn").classList.toggle("on", tab === "conn");
+/* ---------- Vistas ---------- */
+function show(view) {
+  $("viewList").classList.toggle("hidden", view !== "list");
+  $("viewEdit").classList.toggle("hidden", view !== "edit");
+  $("viewConn").classList.toggle("hidden", view !== "conn");
+  $("tabListBtn").classList.toggle("on", view === "list");
+  $("tabNewBtn").classList.toggle("on", view === "edit");
+  $("tabConnBtn").classList.toggle("on", view === "conn");
 }
 $("tabListBtn").onclick = () => { show("list"); if (!rules.length) load().catch(() => {}); };
-$("tabNewBtn").onclick = () => show("new");
+$("tabNewBtn").onclick = () => { draft = newDraft(); sel = "reel"; openEditor("Nueva automatización"); };
 $("tabConnBtn").onclick = () => show("conn");
 
-async function load() {
-  rules = await call("/api/rules");
-  try {
-    saved = await call("/api/defaults");
-    if (!editing) fillDefaults(); // el formulario de «Nueva» arranca con tus predeterminados
-  } catch {}
-  render();
+/* ---------- Modelo ---------- */
+function newDraft() {
+  return {
+    id: null, createdAt: undefined, sent: 0, active: true, mediaId: "", permalink: "", keyword: "",
+    publicReply: saved.publicReply || "",
+    introMessage: saved.intro || DEF_INTRO, buttonText: saved.buttonText || DEF_BUTTON,
+    requireFollow: saved.requireFollow !== false,
+    notFollowingMessage: saved.notFollowing || DEF_NOFOLLOW,
+    message: saved.message || "", link: saved.link || "",
+  };
+}
+function fromRule(r) {
+  return { ...r,
+    introMessage: r.introMessage || saved.intro || DEF_INTRO,
+    buttonText: r.buttonText || saved.buttonText || DEF_BUTTON,
+    notFollowingMessage: r.notFollowingMessage || saved.notFollowing || DEF_NOFOLLOW };
+}
+const reelCode = (p) => (String(p || "").match(/\/(?:reel|reels|p|tv)\/([^/?#]+)/) || [])[1] || "";
+
+/* ---------- Nodos ---------- */
+function nodesOf(r) {
+  const variants = String(r.publicReply || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  const fol = r.requireFollow;
+  const code = reelCode(r.permalink);
+  const short = (s, n) => (s.length > n ? s.slice(0, n) + "…" : s);
+  return {
+    reel:    { id:"reel", ico:"🎬", c:"pink",   t:"Reel",              s: code ? "…/" + code : "Elige un reel" },
+    keyword: { id:"keyword", ico:"💬", c:"amber", t:"Comentario",      s: r.keyword ? "contiene «" + r.keyword + "»" : "Define la palabra" },
+    pub:     { id:"pub", ico:"📣", c:"blue",     t:"Respuesta pública", s: variants.length ? variants.length + " variante" + (variants.length > 1 ? "s" : "") : "Sin respuesta pública", dim: !variants.length },
+    dm:      { id:"dm", ico:"✉️", c:"purple",    t:"Mensaje privado",   s: fol ? "botón «" + (r.buttonText || "") + "»" : "No se usa", dim: !fol },
+    check:   { id:"check", ico:"🔍", c:"teal",   t:"¿Te sigue?",        s: fol ? "Se comprueba en Instagram" : "Desactivado", dim: !fol },
+    final:   { id:"final", ico:"🔗", c:"green",  t:"Enviar enlace",     s: r.message ? short(r.message, 44) : "Escribe el mensaje" },
+    no:      { id:"no", ico:"⚠️", c:"red",       t:"Aviso + botón",     s: fol ? short(r.notFollowingMessage || "", 44) : "No se usa", dim: !fol },
+  };
+}
+function nodeHTML(n, interactive) {
+  return `<div class="node c-${n.c}${n.dim ? " dim" : ""}${interactive ? " clickable" : ""}${interactive && sel === n.id ? " sel" : ""}" data-n="${n.id}">
+    <i class="port l"></i><i class="port r"></i>
+    <div class="nh"><span class="ico">${n.ico}</span><span>${esc(n.t)}</span></div>
+    <div class="ns">${esc(n.s)}</div></div>`;
+}
+function flowHTML(r, interactive) {
+  const n = nodesOf(r), w = '<div class="wire"></div>';
+  return `<div class="flow">
+    ${nodeHTML(n.reel, interactive)}${w}${nodeHTML(n.keyword, interactive)}${w}${nodeHTML(n.pub, interactive)}${w}${nodeHTML(n.dm, interactive)}${w}${nodeHTML(n.check, interactive)}${w}
+    <div class="branch">
+      <div class="bi"><span class="tag yes">Sí</span><div class="wire short"></div>${nodeHTML(n.final, interactive)}</div>
+      <div class="bi"><span class="tag no">No</span><div class="wire short"></div>${nodeHTML(n.no, interactive)}<span class="loop">↺ vuelve a comprobar</span></div>
+    </div></div>`;
 }
 
-$("saveDef").onclick = async () => {
-  try {
-    saved = await call("/api/defaults", { method: "POST", body: JSON.stringify({
-      message: $("message").value, link: $("link").value.trim(), publicReply: $("publicReply").value,
-      intro: $("intro").value.trim() || DEF_INTRO, buttonText: $("buttonText").value.trim() || DEF_BUTTON,
-      notFollowing: $("notFollowing").value.trim() || DEF_NOFOLLOW, requireFollow: $("follow").checked,
-    }) });
-    say("defMsg", "✔ Guardado: las próximas automatizaciones nuevas empezarán con estos mensajes.", true);
-  } catch (e) { say("defMsg", e.message, false); }
-};
+/* ---------- Lista ---------- */
+async function load() {
+  rules = await call("/api/rules");
+  try { saved = await call("/api/defaults"); } catch {}
+  render();
+}
 $("search").oninput = () => render();
 
 function render() {
-  const total = rules.length, activas = rules.filter((r) => r.active).length;
+  const total = rules.length, activas = rules.filter((r) => r.active).length, enviados = rules.reduce((n, r) => n + (r.sent || 0), 0);
   $("count").textContent = total ? `(${total})` : "";
   $("search").classList.toggle("hidden", total < 4);
+  $("stats").innerHTML = total ? `
+    <div class="stat"><b>${total}</b><span class="mut">automatizaciones</span></div>
+    <div class="stat"><b>${activas}</b><span class="mut">activas</span></div>
+    <div class="stat"><b>${enviados}</b><span class="mut">enlaces enviados</span></div>` : "";
   const q = $("search").value.trim().toLowerCase();
   const shown = q ? rules.filter((r) => [r.keyword, r.message, r.link, r.permalink].join(" ").toLowerCase().includes(q)) : rules;
-  const summary = total ? `<div class="mut" style="margin-bottom:8px">${total} en total · ${activas} activas · ${rules.reduce((n, r) => n + (r.sent || 0), 0)} mensajes enviados</div>` : "";
-  $("list").innerHTML = summary + (shown.length ? shown.map((r) => `
-    <div class="rule">
-      <div><span class="tag">${esc(r.keyword)}</span><span class="tag">${r.requireFollow ? "pide seguir" : "sin seguir"}</span><span class="tag">${r.active ? "activa" : "pausada"}</span><span class="tag">${r.sent || 0} enviados</span></div>
-      <div class="mut" style="margin-top:6px"><a href="${esc(r.permalink)}" target="_blank" rel="noopener">${esc(r.permalink || r.mediaId)}</a></div>
-      <div style="margin:6px 0">${esc(r.message)}</div>
-      <div class="mut">${esc(r.link)}</div>
-      <div style="margin-top:8px" class="row">
-        <button class="sec small" onclick="edit('${r.id}')">Editar</button>
-        <button class="sec small" onclick="toggle('${r.id}')">${r.active ? "Pausar" : "Activar"}</button>
-        <button class="sec small" onclick="del('${r.id}')">Borrar</button>
+  if (!shown.length) { $("list").className = "mut"; $("list").innerHTML = total ? "Ninguna coincide con la búsqueda." : "Todavía no hay ninguna. Crea la primera con «➕ Nueva»."; return; }
+  $("list").className = "";
+  $("list").innerHTML = shown.map((r) => {
+    const rr = fromRule(r);
+    const code = reelCode(r.permalink);
+    const variants = String(r.publicReply || "").split("\n").map((s) => s.trim()).filter(Boolean);
+    return `<div class="wf${r.active ? "" : " paused"}">
+      <div class="wf-head">
+        <label class="switch" title="${r.active ? "Pausar" : "Activar"}"><input type="checkbox" ${r.active ? "checked" : ""} onchange="toggle('${r.id}')"><span></span></label>
+        <div><div class="name">«${esc(r.keyword)}» en …/${esc(code || r.mediaId)}</div>
+          <div class="meta">${r.requireFollow ? "Pide seguir antes de enviar" : "Envía directamente"} · ${r.active ? "activa" : "pausada"}</div></div>
+        <div class="sp"><span class="badge">${r.sent || 0} enviados</span></div>
       </div>
-    </div>`).join("") : (total ? "Ninguna coincide con la búsqueda." : "Todavía no hay ninguna. Crea la primera en «➕ Nueva automatización»."));
+      <div class="canvas">${flowHTML(rr, false)}</div>
+      <div class="wf-foot">
+        <span class="reply">${r.link ? "🔗 " + esc(r.link) : ""}</span>
+        <a href="${esc(r.permalink)}" target="_blank" rel="noopener" style="text-decoration:none"><button class="small">Abrir reel ↗</button></a>
+        <button class="small" onclick="edit('${r.id}')">✏️ Editar</button>
+        <button class="small danger" onclick="del('${r.id}')">🗑 Borrar</button>
+      </div></div>`;
+  }).join("");
 }
 
 $("save").onclick = async () => {
@@ -203,48 +295,99 @@ $("save").onclick = async () => {
   catch (e) { say("connMsg", e.message, false); show("conn"); }
 };
 
-$("resolve").onclick = async () => {
-  try {
-    resolved = await call("/api/resolve?url=" + encodeURIComponent($("url").value.trim()));
-    say("resolveMsg", "✔ Encontrado: " + (resolved.caption || resolved.permalink), true);
-  } catch (e) { resolved = null; say("resolveMsg", e.message, false); }
-};
-
-function reset() {
-  editing = null; resolved = null;
-  ["url","keyword"].forEach((i) => $(i).value = "");
-  fillDefaults();
-  $("formTitle").textContent = "Nueva automatización"; $("cancel").style.display = "none";
-  $("resolveMsg").textContent = "";
-}
-$("cancel").onclick = () => { reset(); show("list"); };
-
-window.edit = (id) => {
-  const r = rules.find((x) => x.id === id); if (!r) return;
-  editing = r; resolved = { mediaId: r.mediaId, permalink: r.permalink };
-  $("url").value = r.permalink; $("keyword").value = r.keyword; $("message").value = r.message; $("link").value = r.link;
-  $("follow").checked = r.requireFollow; $("publicReply").value = r.publicReply; $("intro").value = r.introMessage || DEF_INTRO;
-  $("buttonText").value = r.buttonText || DEF_BUTTON; $("notFollowing").value = r.notFollowingMessage || DEF_NOFOLLOW;
-  $("formTitle").textContent = "Editando automatización"; $("cancel").style.display = ""; show("new"); scrollTo({ top: 0, behavior: "smooth" });
-};
 window.toggle = async (id) => { const r = rules.find((x) => x.id === id); await call("/api/rules", { method: "POST", body: JSON.stringify({ ...r, active: !r.active }) }); load(); };
 window.del = async (id) => { if (confirm("¿Borrar esta automatización?")) { await call("/api/rules/" + id, { method: "DELETE" }); load(); } };
+window.edit = (id) => { const r = rules.find((x) => x.id === id); if (!r) return; draft = fromRule(r); sel = "keyword"; openEditor("Editando automatización"); };
+
+/* ---------- Editor ---------- */
+function openEditor(title) {
+  $("formTitle").textContent = title;
+  $("addMsg").textContent = ""; $("addMsg").className = "msg";
+  drawFlow(); drawCfg(); show("edit"); scrollTo({ top: 0, behavior: "smooth" });
+}
+function drawFlow() {
+  $("editFlow").innerHTML = flowHTML(draft, true);
+  $("editFlow").querySelectorAll("[data-n]").forEach((el) => { el.onclick = () => { sel = el.dataset.n; drawFlow(); drawCfg(); }; });
+}
+const CFG = {
+  reel: () => `<h3>🎬 Reel</h3><div class="hint">Pega la URL del reel de tu cuenta y pulsa Buscar para localizarlo.</div>
+    <label>URL del reel</label>
+    <div class="row"><input type="text" id="f_url" placeholder="https://www.instagram.com/reel/XXXXXXXX/" style="flex:3"><button id="f_find" style="flex:1">Buscar</button></div>
+    <div class="msg" id="f_findMsg"></div>`,
+  keyword: () => `<h3>💬 Comentario</h3><div class="hint">Se responde a cualquier comentario que contenga esta palabra, aunque lleve más texto (por ejemplo «X, gracias!»). Sin importar mayúsculas ni tildes.</div>
+    <label>Palabra que deben comentar</label><input type="text" data-f="keyword" placeholder="QUIERO">`,
+  pub: () => `<h3>📣 Respuesta pública</h3><div class="hint">Opcional. Escribe una respuesta por línea y se elegirá una al azar cada vez.</div>
+    <label>Respuestas públicas al comentario</label>
+    <textarea data-f="publicReply" placeholder="¡Te lo mando por DM! 📩&#10;Listo, revisa tu DM 👀&#10;¡Enviado! Mira tus mensajes 🙌"></textarea>`,
+  dm: () => `<h3>✉️ Mensaje privado</h3><div class="hint">Primer mensaje que recibe la persona, con un botón para confirmar que te sigue. Solo se usa si «¿Te sigue?» está activado.</div>
+    <label>Mensaje</label><textarea data-f="introMessage"></textarea>
+    <label>Texto del botón (máx. 20 caracteres)</label><input type="text" data-f="buttonText" maxlength="20">`,
+  check: () => `<h3>🔍 ¿Te sigue?</h3><div class="hint">Si lo activas, solo recibe el enlace quien te siga: se comprueba en Instagram cuando pulsa el botón. Si lo desactivas, el enlace se envía directamente.</div>
+    <div class="check"><label class="switch"><input type="checkbox" data-f="requireFollow"><span></span></label><b>Obligar a seguirme antes de recibirlo</b></div>`,
+  final: () => `<h3>🔗 Enviar enlace</h3><div class="hint">Mensaje final que recibe la persona.</div>
+    <label>Mensaje que se envía</label><textarea data-f="message" placeholder="¡Aquí tienes la guía que te prometí! 🎁"></textarea>
+    <label>Enlace que se envía</label><input type="text" data-f="link" placeholder="https://...">`,
+  no: () => `<h3>⚠️ Aviso + botón</h3><div class="hint">Se envía si pulsa el botón pero todavía no te sigue. Lleva de nuevo el botón para volver a comprobar.</div>
+    <label>Mensaje si todavía no te sigue</label><textarea data-f="notFollowingMessage" style="min-height:64px"></textarea>`,
+};
+function drawCfg() {
+  $("cfg").innerHTML = CFG[sel]();
+  $("cfg").querySelectorAll("[data-f]").forEach((el) => {
+    const f = el.dataset.f;
+    if (el.type === "checkbox") el.checked = !!draft[f]; else el.value = draft[f] ?? "";
+    el.oninput = el.onchange = () => { draft[f] = el.type === "checkbox" ? el.checked : el.value; drawFlow(); };
+  });
+  if (sel === "reel") {
+    $("f_url").value = draft.permalink || "";
+    $("f_findMsg").textContent = draft.mediaId ? "✔ Reel seleccionado" : "";
+    $("f_findMsg").className = "msg ok";
+    $("f_url").oninput = () => { draft.mediaId = ""; };
+    $("f_find").onclick = resolveReel;
+  }
+}
+async function resolveReel() {
+  try {
+    const r = await call("/api/resolve?url=" + encodeURIComponent($("f_url").value.trim()));
+    draft.mediaId = r.mediaId; draft.permalink = r.permalink;
+    say("f_findMsg", "✔ Encontrado: " + (r.caption || r.permalink), true);
+    drawFlow();
+  } catch (e) { draft.mediaId = ""; say("f_findMsg", e.message, false); }
+}
+
+$("cancel").onclick = () => show("list");
 
 $("add").onclick = async () => {
   try {
-    if (!resolved) await $("resolve").onclick();
-    if (!resolved) throw new Error("Primero pulsa Buscar con la URL de un reel de tu cuenta");
+    if (!draft.mediaId) {
+      const url = (sel === "reel" && $("f_url")) ? $("f_url").value.trim() : draft.permalink;
+      if (!url) { sel = "reel"; drawFlow(); drawCfg(); throw new Error("Primero elige el reel: pega su URL y pulsa Buscar"); }
+      const r = await call("/api/resolve?url=" + encodeURIComponent(url));
+      draft.mediaId = r.mediaId; draft.permalink = r.permalink;
+    }
+    if (!draft.keyword.trim()) { sel = "keyword"; drawFlow(); drawCfg(); throw new Error("Falta la palabra que deben comentar"); }
+    if (!draft.message.trim()) { sel = "final"; drawFlow(); drawCfg(); throw new Error("Falta el mensaje que se envía"); }
     await call("/api/rules", { method: "POST", body: JSON.stringify({
-      id: editing?.id, sent: editing?.sent, active: editing ? editing.active : true,
-      mediaId: resolved.mediaId, permalink: resolved.permalink,
-      keyword: $("keyword").value, message: $("message").value, link: $("link").value.trim(),
-      requireFollow: $("follow").checked, publicReply: $("publicReply").value,
-      introMessage: $("intro").value.trim() || DEF_INTRO,
-      buttonText: $("buttonText").value.trim() || DEF_BUTTON,
-      notFollowingMessage: $("notFollowing").value.trim() || DEF_NOFOLLOW,
+      id: draft.id || undefined, createdAt: draft.createdAt, sent: draft.sent, active: draft.active,
+      mediaId: draft.mediaId, permalink: draft.permalink,
+      keyword: draft.keyword, message: draft.message, link: (draft.link || "").trim(),
+      requireFollow: !!draft.requireFollow, publicReply: draft.publicReply || "",
+      introMessage: (draft.introMessage || "").trim() || DEF_INTRO,
+      buttonText: (draft.buttonText || "").trim() || DEF_BUTTON,
+      notFollowingMessage: (draft.notFollowingMessage || "").trim() || DEF_NOFOLLOW,
     }) });
-    say("addMsg", "✔ Guardada", true); reset(); await load(); show("list");
+    await load(); show("list");
   } catch (e) { say("addMsg", e.message, false); }
+};
+
+$("saveDef").onclick = async () => {
+  try {
+    saved = await call("/api/defaults", { method: "POST", body: JSON.stringify({
+      message: draft.message, link: (draft.link || "").trim(), publicReply: draft.publicReply || "",
+      intro: (draft.introMessage || "").trim() || DEF_INTRO, buttonText: (draft.buttonText || "").trim() || DEF_BUTTON,
+      notFollowing: (draft.notFollowingMessage || "").trim() || DEF_NOFOLLOW, requireFollow: !!draft.requireFollow,
+    }) });
+    say("defMsg", "✔ Guardado: las próximas automatizaciones nuevas empezarán con estos mensajes.", true);
+  } catch (e) { say("defMsg", e.message, false); }
 };
 
 if ($("pwd").value) $("save").onclick(); else show("conn");
