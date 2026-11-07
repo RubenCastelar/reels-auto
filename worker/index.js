@@ -129,7 +129,7 @@ async function handleComment(env, v) {
     let r = await sendMsg(env, { comment_id: v.id }, btn);
     if (!r.ok) {
       // plan B: texto plano; el usuario responde cualquier cosa
-      r = await sendMsg(env, { comment_id: v.id }, { text: `${intro}\n\nCuando me sigas, respóndeme a este mensaje.` });
+      r = await sendMsg(env, { comment_id: v.id }, { text: `${intro}\n\nCuando me sigas, escríbeme «${rule.buttonText || "Ya te sigo ✅"}».` });
     }
     // Queda pendiente: el sondeo de conversaciones detecta su respuesta (los avisos de Meta no llegan de cuentas sin rol)
     if (r.ok) await setPending(env, v.from, rule.id);
@@ -140,20 +140,38 @@ async function handleComment(env, v) {
 }
 
 // Pendientes: personas a las que se pidió seguir y que aún no han recibido el enlace
-const pendKeys = (u) => [`pending:${u.id}`, u.username ? `pending:u:${u.username}` : null].filter(Boolean);
-async function setPending(env, user, ruleId) {
-  const val = JSON.stringify({ ruleId, t: Date.now(), username: user.username || "" });
-  for (const k of pendKeys(user)) await env.RULES.put(k, val, { expirationTtl: 60 * 60 * 24 * 2 });
-}
-async function getPending(env, user) {
-  for (const k of pendKeys(user)) {
-    const v = await env.RULES.get(k);
-    if (v) { try { return JSON.parse(v); } catch { return { ruleId: v, t: 0 }; } }
-  }
+// Se guardan en UNA sola clave (un objeto) para que cada sondeo cueste una única lectura de KV.
+const getPend = async (env) => (await env.RULES.get("pend", "json")) || {};
+const putPend = (env, p) => env.RULES.put("pend", JSON.stringify(p));
+function findPend(p, user) {
+  for (const [k, e] of Object.entries(p)) if (k === String(user.id) || (user.username && e.username === user.username)) return [k, e];
   return null;
 }
+async function setPending(env, user, ruleId) {
+  const p = await getPend(env);
+  const f = findPend(p, user);
+  if (f) delete p[f[0]];
+  p[String(user.id)] = { ruleId, t: Date.now(), username: user.username || "" };
+  for (const [k, e] of Object.entries(p)) if (Date.now() - e.t > 2 * 24 * 3600 * 1000) delete p[k]; // caducan a los 2 días
+  await putPend(env, p);
+}
+async function getPending(env, user) {
+  const f = findPend(await getPend(env), user);
+  return f ? f[1] : null;
+}
 async function clearPending(env, user) {
-  for (const k of pendKeys(user)) await env.RULES.delete(k);
+  const p = await getPend(env);
+  const f = findPend(p, user);
+  if (f) { delete p[f[0]]; await putPend(env, p); }
+}
+
+// Solo se atiende el texto del botón («Ya te sigo ✅» o equivalente); cualquier otro mensaje se ignora
+const cleanTxt = (s) => norm(s).replace(/[^a-z0-9ñ ]/g, " ").replace(/\s+/g, " ").trim();
+function isFollowConfirm(text, rule) {
+  const t = cleanTxt(text);
+  if (!t) return false;
+  const btn = cleanTxt(rule?.buttonText || "Ya te sigo");
+  return t === btn || t.includes("ya te sigo") || (btn && t.includes(btn));
 }
 
 async function deliverIfFollowing(env, senderId, ruleId, user = { id: senderId }) {
@@ -184,28 +202,29 @@ async function deliverIfFollowing(env, senderId, ruleId, user = { id: senderId }
   }
 }
 
-// Cada minuto: lee las conversaciones y atiende a quien haya respondido tras pedirle que siguiera
-async function pollConversations(env) {
+// Lee las conversaciones SOLO de quien está pendiente y atiende a quien pulse «Ya te sigo ✅».
+// Si no hay pendientes no hace ninguna llamada a Instagram.
+async function pollConversations(env, pend, rules) {
+  if (!pend || !Object.keys(pend).length) return;
   const r = await graph(env, `/${env.IG_USER_ID}/conversations`, {
-    params: { platform: "instagram", fields: "updated_time,participants,messages.limit(5){message,from,created_time}", limit: "25" },
+    params: { platform: "instagram", fields: "participants,messages.limit(4){message,from,created_time}", limit: "20" },
   });
-  const info = { t: new Date().toISOString(), ok: r.ok, error: r.ok ? "" : String(r.data?.error?.message || "").slice(0, 150), convs: 0, pendientes: [], atendidos: [] };
-  if (r.ok) {
-    for (const c of r.data.data || []) {
-      info.convs++;
-      const other = (c.participants?.data || []).find((p) => p.id !== env.IG_USER_ID);
-      if (!other) continue;
-      const pend = await getPending(env, other);
-      if (!pend) continue;
-      const last = (c.messages?.data || []).filter((m) => m.from?.id !== env.IG_USER_ID).map((m) => m.created_time)[0] || "";
-      const replied = (c.messages?.data || []).some((m) => m.from?.id !== env.IG_USER_ID && Date.parse(m.created_time) > pend.t);
-      info.pendientes.push({ u: other.username, pendDesde: new Date(pend.t).toISOString(), ultimoMensajeUsuario: last, respondio: replied });
-      if (!replied) continue;
-      info.atendidos.push(other.username);
-      await deliverIfFollowing(env, other.id, pend.ruleId, other).catch((e) => console.log("poll conv", e));
-    }
+  if (!r.ok) { console.log("poll conv error", String(r.data?.error?.message || "").slice(0, 150)); return; }
+  for (const c of r.data.data || []) {
+    const other = (c.participants?.data || []).find((p) => p.id !== env.IG_USER_ID);
+    if (!other) continue;
+    const f = findPend(pend, other);
+    if (!f) continue;
+    const entry = f[1];
+    const rule = rules.find((x) => x.id === entry.ruleId);
+    const confirm = (c.messages?.data || []).some(
+      (m) => m.from?.id !== env.IG_USER_ID && Date.parse(m.created_time) > entry.t && isFollowConfirm(m.message, rule)
+    );
+    if (!confirm) continue;
+    console.log("confirma seguimiento", other.username);
+    await deliverIfFollowing(env, other.id, entry.ruleId, other).catch((e) => console.log("poll conv", e));
+    delete pend[f[0]]; // evita atenderlo dos veces en esta misma ejecución
   }
-  await env.RULES.put("pollinfo", JSON.stringify(info));
 }
 
 async function handleMessaging(env, m) {
@@ -213,10 +232,11 @@ async function handleMessaging(env, m) {
   const senderId = m.sender?.id;
   const payload = m.postback?.payload;
   if (payload?.startsWith("FOLLOW:")) return deliverIfFollowing(env, senderId, payload.slice(7));
-  // plan B por texto
-  const text = norm(m.message?.text || "").trim();
+  // plan B por texto: solo «Ya te sigo»
   const pend = await getPending(env, { id: senderId });
-  if (text && pend) return deliverIfFollowing(env, senderId, pend.ruleId);
+  if (!pend) return;
+  const rule = (await getRules(env)).find((x) => x.id === pend.ruleId);
+  if (isFollowConfirm(m.message?.text, rule)) return deliverIfFollowing(env, senderId, pend.ruleId);
 }
 
 async function handleWebhook(request, env, ctx) {
@@ -344,8 +364,8 @@ async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
-  if (url.pathname === "/api/pollinfo" && request.method === "GET") {
-    return json((await env.RULES.get("pollinfo", "json")) || {});
+  if (url.pathname === "/api/pending" && request.method === "GET") {
+    return json(await getPend(env));
   }
 
   if (url.pathname === "/api/debug" && request.method === "GET") {
@@ -354,8 +374,9 @@ async function handleApi(request, env, url) {
 
   // Lanza la consulta de comentarios ahora mismo (la misma que corre cada minuto)
   if (url.pathname === "/api/poll" && request.method === "POST") {
-    await pollComments(env);
-    await pollConversations(env);
+    const all = await getRules(env);
+    await pollComments(env, all.filter((r) => r.active && r.createdAt));
+    await pollConversations(env, await getPend(env), all);
     return json({ ok: true });
   }
 
@@ -398,26 +419,48 @@ async function handleApi(request, env, url) {
 
 // ---------- consulta periódica (alternativa a los avisos de Meta) ----------
 // Cada minuto lee los comentarios nuevos de los vídeos con regla activa y los procesa.
-async function pollComments(env) {
-  const rules = (await getRules(env)).filter((r) => r.active && r.createdAt);
+const seenComments = new Set(); // en memoria: evita leer KV una y otra vez por el mismo comentario
+async function pollComments(env, rules) {
   const week = Date.now() - 6.5 * 24 * 3600 * 1000;
   for (const rule of rules) {
     const since = Math.max(Date.parse(rule.createdAt), week);
-    const r = await graph(env, `/${rule.mediaId}/comments`, { params: { fields: "id,text,username,from,timestamp", limit: "50" } });
+    const r = await graph(env, `/${rule.mediaId}/comments`, { params: { fields: "id,text,username,from,timestamp", limit: "15" } });
     if (!r.ok) { console.log("poll error", rule.id, JSON.stringify(r.data?.error?.message)); continue; }
     const fresh = (r.data.data || [])
-      .filter((c) => Date.parse(c.timestamp) >= since)
+      .filter((c) => Date.parse(c.timestamp) >= since && !seenComments.has(c.id))
       .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
     for (const c of fresh) {
+      seenComments.add(c.id);
       const from = c.from?.id ? c.from : { id: c.username, username: c.username };
       await handleComment(env, { id: c.id, text: c.text, from, media: { id: rule.mediaId } }).catch((e) => console.log("poll handle", e));
     }
   }
 }
 
+// Cloudflare solo permite lanzar una tarea programada por minuto, así que cada ejecución
+// consulta Instagram varias veces seguidas (cada pocos segundos) durante ~50 s.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const POLL_EVERY_MS = 4000;
+async function pollLoop(env) {
+  const t0 = Date.now();
+  let calls = 0;
+  for (;;) {
+    const all = await getRules(env);
+    const rules = all.filter((r) => r.active && r.createdAt);
+    const pend = await getPend(env);
+    const cost = rules.length + (Object.keys(pend).length ? 1 : 0);
+    if (!cost || calls + cost > 34) break; // sin trabajo, o límite de llamadas por ejecución del plan gratuito
+    calls += cost;
+    await pollComments(env, rules);
+    await pollConversations(env, pend, all);
+    if (Date.now() - t0 + POLL_EVERY_MS > 52000) break;
+    await sleep(POLL_EVERY_MS);
+  }
+}
+
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(pollComments(env).then(() => pollConversations(env)));
+    ctx.waitUntil(pollLoop(env));
   },
 
   async fetch(request, env, ctx) {
