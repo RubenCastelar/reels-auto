@@ -364,6 +364,22 @@ async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
+  // Configuración predeterminada de mensajes para las automatizaciones nuevas (editable desde el panel)
+  if (url.pathname === "/api/defaults" && request.method === "GET") {
+    return json((await env.RULES.get("defaults", "json")) || {});
+  }
+  if (url.pathname === "/api/defaults" && request.method === "POST") {
+    const b = await request.json();
+    const s = (v) => String(v ?? "").slice(0, 1500);
+    const d = {
+      message: s(b.message), link: s(b.link), publicReply: s(b.publicReply),
+      intro: s(b.intro), buttonText: s(b.buttonText).slice(0, 20), notFollowing: s(b.notFollowing),
+      requireFollow: b.requireFollow !== false,
+    };
+    await env.RULES.put("defaults", JSON.stringify(d));
+    return json(d);
+  }
+
   if (url.pathname === "/api/lat" && request.method === "GET") {
     return json((await env.RULES.get("lat", "json")) || []);
   }

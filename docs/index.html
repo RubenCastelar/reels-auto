@@ -88,6 +88,10 @@
       <button id="add">Guardar automatización</button>
       <button class="sec" id="cancel" style="display:none">Cancelar edición</button>
     </div>
+    <div class="row" style="margin-top:8px">
+      <button class="sec" id="saveDef">💾 Guardar estos mensajes como predeterminados</button>
+    </div>
+    <div class="msg mut" id="defMsg">Los mensajes vienen rellenados con tu configuración predeterminada. Cámbialos y pulsa el botón de arriba para que se queden guardados para las próximas.</div>
     <div class="msg" id="addMsg"></div>
   </div>
 
@@ -109,8 +113,16 @@ const API = "https://reels-auto.rubirup66.workers.dev"; // no es un secreto
 const DEF_INTRO = "Heyy 👋 vi tu comentario en mi reel (sobre querer el enlace). Solo sígueme y te lo enviaré lo antes posible 🙏";
 const DEF_NOFOLLOW = "Asegúrate de que me sigues para poder enviarte el enlace!";
 const DEF_BUTTON = "Ya te sigo ✅";
+// Predeterminados guardados por ti (viven en el servidor); si no hay, se usan los de fábrica
+let saved = {};
 function fillDefaults() {
-  $("intro").value = DEF_INTRO; $("notFollowing").value = DEF_NOFOLLOW; $("buttonText").value = DEF_BUTTON;
+  $("intro").value = saved.intro || DEF_INTRO;
+  $("notFollowing").value = saved.notFollowing || DEF_NOFOLLOW;
+  $("buttonText").value = saved.buttonText || DEF_BUTTON;
+  $("message").value = saved.message || "";
+  $("link").value = saved.link || "";
+  $("publicReply").value = saved.publicReply || "";
+  $("follow").checked = saved.requireFollow !== false;
 }
 fillDefaults();
 
@@ -145,8 +157,23 @@ $("tabConnBtn").onclick = () => show("conn");
 
 async function load() {
   rules = await call("/api/rules");
+  try {
+    saved = await call("/api/defaults");
+    if (!editing) fillDefaults(); // el formulario de «Nueva» arranca con tus predeterminados
+  } catch {}
   render();
 }
+
+$("saveDef").onclick = async () => {
+  try {
+    saved = await call("/api/defaults", { method: "POST", body: JSON.stringify({
+      message: $("message").value, link: $("link").value.trim(), publicReply: $("publicReply").value,
+      intro: $("intro").value.trim() || DEF_INTRO, buttonText: $("buttonText").value.trim() || DEF_BUTTON,
+      notFollowing: $("notFollowing").value.trim() || DEF_NOFOLLOW, requireFollow: $("follow").checked,
+    }) });
+    say("defMsg", "✔ Guardado: las próximas automatizaciones nuevas empezarán con estos mensajes.", true);
+  } catch (e) { say("defMsg", e.message, false); }
+};
 $("search").oninput = () => render();
 
 function render() {
@@ -185,8 +212,8 @@ $("resolve").onclick = async () => {
 
 function reset() {
   editing = null; resolved = null;
-  ["url","keyword","message","link","publicReply"].forEach((i) => $(i).value = "");
-  fillDefaults(); $("follow").checked = true;
+  ["url","keyword"].forEach((i) => $(i).value = "");
+  fillDefaults();
   $("formTitle").textContent = "Nueva automatización"; $("cancel").style.display = "none";
   $("resolveMsg").textContent = "";
 }
