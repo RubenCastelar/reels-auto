@@ -224,6 +224,19 @@ async function handleApi(request, env, url) {
     return json({ error: "No he encontrado ese vídeo en tu cuenta" }, 404);
   }
 
+  // Estado / activación de la suscripción de la cuenta de Instagram a los avisos (webhooks)
+  if (url.pathname === "/api/subscribe") {
+    if (request.method === "POST") {
+      const r = await graph(env, `/${env.IG_USER_ID}/subscribed_apps`, {
+        method: "POST",
+        params: { subscribed_fields: "comments,messages,messaging_postbacks" },
+      });
+      return json(r.data, r.ok ? 200 : 502);
+    }
+    const r = await graph(env, `/${env.IG_USER_ID}/subscribed_apps`);
+    return json(r.data, r.ok ? 200 : 502);
+  }
+
   if (url.pathname === "/api/me" && request.method === "GET") {
     const r = await graph(env, `/${env.IG_USER_ID}`, { params: { fields: "username" } });
     return json(r.data, r.ok ? 200 : 502);
