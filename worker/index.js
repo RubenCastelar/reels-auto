@@ -124,7 +124,7 @@ async function handleComment(env, v) {
   }
 
   if (rule.requireFollow && !yaSigue) {
-    const intro = rule.introMessage || "¡Hola! Para enviarte lo prometido, primero sígueme y luego pulsa el botón 👇";
+    const intro = rule.introMessage || "Heyy 👋 vi tu comentario en mi reel (sobre querer el enlace). Solo sígueme y te lo enviaré lo antes posible 🙏";
     const btn = buttonMessage(intro, rule.buttonText || "Ya te sigo ✅", `FOLLOW:${rule.id}`);
     let r = await sendMsg(env, { comment_id: v.id }, btn);
     if (!r.ok) {
@@ -195,7 +195,7 @@ async function deliverIfFollowing(env, senderId, ruleId, user = { id: senderId }
     await clearPending(env, user);
     await bump(env, rule.id);
   } else {
-    const msg = rule.notFollowingMessage || "Todavía no veo que me sigas 🙈 Síguenos y pulsa el botón otra vez.";
+    const msg = rule.notFollowingMessage || "Asegúrate de que me sigues para poder enviarte el enlace!";
     const sent = await sendMsg(env, { id: senderId }, buttonMessage(msg, rule.buttonText || "Ya te sigo ✅", `FOLLOW:${rule.id}`));
     if (!sent.ok) await sendMsg(env, { id: senderId }, { text: msg });
     await setPending(env, { id: senderId, username: p.data?.username || user.username }, rule.id); // espera su próxima respuesta
