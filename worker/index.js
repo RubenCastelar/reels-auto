@@ -107,30 +107,68 @@ async function handleComment(env, v) {
   if (rule.requireFollow) {
     const intro = rule.introMessage || "¡Hola! Para enviarte lo prometido, primero sígueme y luego pulsa el botón 👇";
     const btn = buttonMessage(intro, rule.buttonText || "Ya te sigo ✅", `FOLLOW:${rule.id}`);
-    const r = await sendMsg(env, { comment_id: v.id }, btn);
+    let r = await sendMsg(env, { comment_id: v.id }, btn);
     if (!r.ok) {
-      // plan B: texto plano; el usuario responde "SI"
-      await sendMsg(env, { comment_id: v.id }, { text: `${intro}\n\nCuando me sigas, responde "SI".` });
-      await env.RULES.put(`pending:${v.from.id}`, rule.id, { expirationTtl: 60 * 60 * 24 });
+      // plan B: texto plano; el usuario responde cualquier cosa
+      r = await sendMsg(env, { comment_id: v.id }, { text: `${intro}\n\nCuando me sigas, respóndeme a este mensaje.` });
     }
+    // Queda pendiente: el sondeo de conversaciones detecta su respuesta (los avisos de Meta no llegan de cuentas sin rol)
+    if (r.ok) await setPending(env, v.from, rule.id);
   } else {
     await sendMsg(env, { comment_id: v.id }, { text: finalText(rule) });
     await bump(env, rule.id);
   }
 }
 
-async function deliverIfFollowing(env, senderId, ruleId) {
+// Pendientes: personas a las que se pidió seguir y que aún no han recibido el enlace
+const pendKeys = (u) => [`pending:${u.id}`, u.username ? `pending:u:${u.username}` : null].filter(Boolean);
+async function setPending(env, user, ruleId) {
+  const val = JSON.stringify({ ruleId, t: Date.now(), username: user.username || "" });
+  for (const k of pendKeys(user)) await env.RULES.put(k, val, { expirationTtl: 60 * 60 * 24 * 2 });
+}
+async function getPending(env, user) {
+  for (const k of pendKeys(user)) {
+    const v = await env.RULES.get(k);
+    if (v) { try { return JSON.parse(v); } catch { return { ruleId: v, t: 0 }; } }
+  }
+  return null;
+}
+async function clearPending(env, user) {
+  for (const k of pendKeys(user)) await env.RULES.delete(k);
+}
+
+async function deliverIfFollowing(env, senderId, ruleId, user = { id: senderId }) {
   const rules = await getRules(env);
   const rule = rules.find((r) => r.id === ruleId);
   if (!rule) return;
   const p = await graph(env, `/${senderId}`, { params: { fields: "is_user_follow_business,username" } });
+  console.log("seguimiento", senderId, JSON.stringify(p.data).slice(0, 200));
   if (p.ok && p.data.is_user_follow_business) {
     await sendMsg(env, { id: senderId }, { text: finalText(rule) });
-    await env.RULES.delete(`pending:${senderId}`);
+    await clearPending(env, { id: senderId, username: p.data.username || user.username });
+    await clearPending(env, user);
     await bump(env, rule.id);
   } else {
-    const msg = rule.notFollowingMessage || "Todavía no veo que me sigas 🙈 Síguenos y pulsa el botón otra vez.";
-    await sendMsg(env, { id: senderId }, buttonMessage(msg, rule.buttonText || "Ya te sigo ✅", `FOLLOW:${rule.id}`));
+    const msg = rule.notFollowingMessage || "Todavía no veo que me sigas 🙈 Síguenos y escríbeme otra vez.";
+    await sendMsg(env, { id: senderId }, { text: msg });
+    await setPending(env, { id: senderId, username: p.data?.username || user.username }, rule.id); // espera su próxima respuesta
+  }
+}
+
+// Cada minuto: lee las conversaciones y atiende a quien haya respondido tras pedirle que siguiera
+async function pollConversations(env) {
+  const r = await graph(env, `/${env.IG_USER_ID}/conversations`, {
+    params: { platform: "instagram", fields: "updated_time,participants,messages.limit(5){message,from,created_time}", limit: "25" },
+  });
+  if (!r.ok) return;
+  for (const c of r.data.data || []) {
+    const other = (c.participants?.data || []).find((p) => p.id !== env.IG_USER_ID);
+    if (!other) continue;
+    const pend = await getPending(env, other);
+    if (!pend) continue;
+    const replied = (c.messages?.data || []).some((m) => m.from?.id !== env.IG_USER_ID && Date.parse(m.created_time) > pend.t);
+    if (!replied) continue;
+    await deliverIfFollowing(env, other.id, pend.ruleId, other).catch((e) => console.log("poll conv", e));
   }
 }
 
@@ -141,10 +179,8 @@ async function handleMessaging(env, m) {
   if (payload?.startsWith("FOLLOW:")) return deliverIfFollowing(env, senderId, payload.slice(7));
   // plan B por texto
   const text = norm(m.message?.text || "").trim();
-  if (text === "si" || text === "sí") {
-    const ruleId = await env.RULES.get(`pending:${senderId}`);
-    if (ruleId) return deliverIfFollowing(env, senderId, ruleId);
-  }
+  const pend = await getPending(env, { id: senderId });
+  if (text && pend) return deliverIfFollowing(env, senderId, pend.ruleId);
 }
 
 async function handleWebhook(request, env, ctx) {
@@ -240,6 +276,23 @@ async function handleApi(request, env, url) {
     return json({ error: "No he encontrado ese vídeo en tu cuenta" }, 404);
   }
 
+  // Lee las conversaciones recientes de Instagram (para comprobar que la API las devuelve)
+  if (url.pathname === "/api/conversations" && request.method === "GET") {
+    const r = await graph(env, `/${env.IG_USER_ID}/conversations`, {
+      params: { platform: "instagram", fields: "id,updated_time,participants,messages.limit(4){message,from,created_time}", limit: "10" },
+    });
+    if (!r.ok) return json({ error: r.data?.error?.message || "Error de la API" }, 502);
+    return json({ conversations: r.data.data || [] }); // sin paging: evita exponer el token
+  }
+
+  // Marca a una persona como pendiente de confirmar que te sigue (útil para pruebas)
+  if (url.pathname === "/api/pending" && request.method === "POST") {
+    const b = await request.json();
+    if (!b.id || !b.ruleId) return json({ error: "Faltan id o ruleId" }, 400);
+    await setPending(env, { id: String(b.id), username: b.username || "" }, b.ruleId);
+    return json({ ok: true });
+  }
+
   if (url.pathname === "/api/debug" && request.method === "GET") {
     return json((await env.RULES.get("debug", "json")) || []);
   }
@@ -247,6 +300,7 @@ async function handleApi(request, env, url) {
   // Lanza la consulta de comentarios ahora mismo (la misma que corre cada minuto)
   if (url.pathname === "/api/poll" && request.method === "POST") {
     await pollComments(env);
+    await pollConversations(env);
     return json({ ok: true });
   }
 
@@ -308,7 +362,7 @@ async function pollComments(env) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(pollComments(env));
+    ctx.waitUntil(pollComments(env).then(() => pollConversations(env)));
   },
 
   async fetch(request, env, ctx) {
