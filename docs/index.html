@@ -105,6 +105,15 @@ let resolved = null, editing = null, rules = [];
 
 const API = "https://reels-auto.rubirup66.workers.dev"; // no es un secreto
 
+// Textos por defecto (si dejas el campo vacío, se usan estos)
+const DEF_INTRO = "Heyy 👋 vi tu comentario en mi reel (sobre querer el enlace). Solo sígueme y te lo enviaré lo antes posible 🙏";
+const DEF_NOFOLLOW = "Asegúrate de que me sigues para poder enviarte el enlace!";
+const DEF_BUTTON = "Ya te sigo ✅";
+function fillDefaults() {
+  $("intro").value = DEF_INTRO; $("notFollowing").value = DEF_NOFOLLOW; $("buttonText").value = DEF_BUTTON;
+}
+fillDefaults();
+
 // Acceso rápido: abre el panel con  ...#clave=TU_CONTRASEÑA  (el hash no viaja a ningún servidor)
 const hashKey = new URLSearchParams(location.hash.slice(1)).get("clave");
 if (hashKey) { store.set("pwd", hashKey); history.replaceState(null, "", location.pathname + location.search); }
@@ -176,8 +185,8 @@ $("resolve").onclick = async () => {
 
 function reset() {
   editing = null; resolved = null;
-  ["url","keyword","message","link","publicReply","intro","notFollowing"].forEach((i) => $(i).value = "");
-  $("buttonText").value = "Ya te sigo ✅"; $("follow").checked = true;
+  ["url","keyword","message","link","publicReply"].forEach((i) => $(i).value = "");
+  fillDefaults(); $("follow").checked = true;
   $("formTitle").textContent = "Nueva automatización"; $("cancel").style.display = "none";
   $("resolveMsg").textContent = "";
 }
@@ -187,8 +196,8 @@ window.edit = (id) => {
   const r = rules.find((x) => x.id === id); if (!r) return;
   editing = r; resolved = { mediaId: r.mediaId, permalink: r.permalink };
   $("url").value = r.permalink; $("keyword").value = r.keyword; $("message").value = r.message; $("link").value = r.link;
-  $("follow").checked = r.requireFollow; $("publicReply").value = r.publicReply; $("intro").value = r.introMessage;
-  $("buttonText").value = r.buttonText; $("notFollowing").value = r.notFollowingMessage;
+  $("follow").checked = r.requireFollow; $("publicReply").value = r.publicReply; $("intro").value = r.introMessage || DEF_INTRO;
+  $("buttonText").value = r.buttonText || DEF_BUTTON; $("notFollowing").value = r.notFollowingMessage || DEF_NOFOLLOW;
   $("formTitle").textContent = "Editando automatización"; $("cancel").style.display = ""; show("new"); scrollTo({ top: 0, behavior: "smooth" });
 };
 window.toggle = async (id) => { const r = rules.find((x) => x.id === id); await call("/api/rules", { method: "POST", body: JSON.stringify({ ...r, active: !r.active }) }); load(); };
@@ -202,8 +211,10 @@ $("add").onclick = async () => {
       id: editing?.id, sent: editing?.sent, active: editing ? editing.active : true,
       mediaId: resolved.mediaId, permalink: resolved.permalink,
       keyword: $("keyword").value, message: $("message").value, link: $("link").value.trim(),
-      requireFollow: $("follow").checked, publicReply: $("publicReply").value, introMessage: $("intro").value,
-      buttonText: $("buttonText").value, notFollowingMessage: $("notFollowing").value,
+      requireFollow: $("follow").checked, publicReply: $("publicReply").value,
+      introMessage: $("intro").value.trim() || DEF_INTRO,
+      buttonText: $("buttonText").value.trim() || DEF_BUTTON,
+      notFollowingMessage: $("notFollowing").value.trim() || DEF_NOFOLLOW,
     }) });
     say("addMsg", "✔ Guardada", true); reset(); await load(); show("list");
   } catch (e) { say("addMsg", e.message, false); }
