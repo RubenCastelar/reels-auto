@@ -98,6 +98,7 @@ async function bump(env, ruleId) {
 }
 
 // ---------- webhook ----------
+const lastPublicReply = {}; // última respuesta pública usada por regla (en memoria)
 async function handleComment(env, v) {
   if (!v?.id || !v.media?.id || !v.from?.id) return;
   if (v.from.id === env.IG_USER_ID) return; // ignora tus propios comentarios
@@ -110,8 +111,14 @@ async function handleComment(env, v) {
   if (!rule) return;
   await env.RULES.put(seen, "1", { expirationTtl: 60 * 60 * 24 * 7 });
 
-  if (rule.publicReply) {
-    await graph(env, `/${v.id}/replies`, { method: "POST", body: { message: rule.publicReply } });
+  // Varias respuestas posibles (una por línea): se elige una al azar, evitando repetir la anterior
+  const variants = String(rule.publicReply || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  if (variants.length) {
+    let pool = variants.length > 1 ? variants.filter((x) => x !== lastPublicReply[rule.id]) : variants;
+    if (!pool.length) pool = variants;
+    const reply = pool[Math.floor(Math.random() * pool.length)];
+    lastPublicReply[rule.id] = reply;
+    await graph(env, `/${v.id}/replies`, { method: "POST", body: { message: reply } });
   }
 
   // Si ya te sigue, se le envía el contenido directamente (sin pedirle nada)
