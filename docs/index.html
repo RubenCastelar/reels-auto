@@ -13,7 +13,8 @@
   @media (prefers-color-scheme: dark) {
     :root { --bg:#14151a; --dot:#2b2e38; --card:#1f2128; --tx:#e8eaed; --mut:#9aa0a6; --line:#2f323d; --wire:#5b6275; }
   }
-  * { box-sizing:border-box; }
+  :root { color-scheme: light dark; }
+  * { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--wire) transparent; }
   body { margin:0; background:var(--bg); color:var(--tx); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; min-height:100vh;
          background-image:radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size:22px 22px; }
   main { max-width:1220px; margin:0 auto; padding:18px 16px 70px; }
