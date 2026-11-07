@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reels Auto</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --tx:#1b1f24; --mut:#6b7280; --line:#e5e7eb; --acc:#e1306c; --ok:#16a34a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --card:#181b21; --tx:#e8eaed; --mut:#9aa0a6; --line:#2a2f37; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.45 system-ui,-apple-system,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:22px; margin:8px 0 18px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:13px; color:var(--mut); margin:12px 0 4px; }
+  input[type=text], input[type=password], textarea { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--tx); font:inherit; }
+  textarea { min-height:80px; resize:vertical; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  button { padding:10px 14px; border:0; border-radius:8px; background:var(--acc); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  button.sec { background:transparent; color:var(--tx); border:1px solid var(--line); }
+  button.small { padding:6px 10px; font-size:13px; }
+  .check { display:flex; align-items:center; gap:8px; margin-top:14px; }
+  .msg { font-size:13px; margin-top:8px; } .ok { color:var(--ok); } .err { color:#dc2626; }
+  .rule { border-top:1px solid var(--line); padding:12px 0; }
+  .rule:first-child { border-top:0; }
+  .tag { display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12px; margin-right:6px; }
+  .mut { color:var(--mut); font-size:13px; word-break:break-all; }
+  details summary { cursor:pointer; color:var(--mut); font-size:13px; margin-top:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎬 Reels Auto</h1>
+
+  <div class="card" id="conn">
+    <h2>Conexión</h2>
+    <label>URL de tu Worker</label>
+    <input type="text" id="api" placeholder="https://reels-auto.TU-USUARIO.workers.dev">
+    <label>Contraseña del panel</label>
+    <input type="password" id="pwd">
+    <div class="row" style="margin-top:12px"><button id="save">Guardar y conectar</button></div>
+    <div class="msg" id="connMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2 id="formTitle">Nueva automatización</h2>
+    <label>URL del reel</label>
+    <div class="row">
+      <input type="text" id="url" placeholder="https://www.instagram.com/reel/XXXXXXXX/" style="flex:3">
+      <button class="sec" id="resolve" style="flex:1">Buscar</button>
+    </div>
+    <div class="msg" id="resolveMsg"></div>
+
+    <label>Palabra que deben comentar</label>
+    <input type="text" id="keyword" placeholder="QUIERO">
+
+    <label>Mensaje que se envía</label>
+    <textarea id="message" placeholder="¡Aquí tienes la guía que te prometí! 🎁"></textarea>
+
+    <label>Enlace que se envía</label>
+    <input type="text" id="link" placeholder="https://...">
+
+    <div class="check"><input type="checkbox" id="follow" checked><label for="follow" style="margin:0;color:var(--tx)">Obligar a seguirme antes de recibirlo</label></div>
+
+    <details>
+      <summary>Opciones avanzadas</summary>
+      <label>Respuesta pública al comentario (opcional)</label>
+      <input type="text" id="publicReply" placeholder="¡Te lo mando por DM! 📩">
+      <label>Mensaje previo cuando hay que seguir</label>
+      <textarea id="intro" placeholder="¡Hola! Para enviarte lo prometido, primero sígueme y luego pulsa el botón 👇"></textarea>
+      <label>Texto del botón (máx. 20 caracteres)</label>
+      <input type="text" id="buttonText" value="Ya te sigo ✅" maxlength="20">
+      <label>Mensaje si todavía no te sigue</label>
+      <input type="text" id="notFollowing" placeholder="Todavía no veo que me sigas 🙈 Síguenos y pulsa otra vez.">
+    </details>
+
+    <div class="row" style="margin-top:16px">
+      <button id="add">Guardar automatización</button>
+      <button class="sec" id="cancel" style="display:none">Cancelar edición</button>
+    </div>
+    <div class="msg" id="addMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Automatizaciones activas</h2>
+    <div id="list" class="mut">Conecta arriba para ver tus automatizaciones.</div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = { get:(k)=>{ try { return localStorage.getItem(k) || ""; } catch { return ""; } }, set:(k,v)=>{ try { localStorage.setItem(k,v); } catch {} } };
+let resolved = null, editing = null, rules = [];
+
+$("api").value = store.get("api"); $("pwd").value = store.get("pwd");
+
+async function call(path, opts = {}) {
+  const res = await fetch($("api").value.replace(/\/$/, "") + path, {
+    ...opts,
+    headers: { Authorization: "Bearer " + $("pwd").value, "Content-Type": "application/json" },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Error " + res.status);
+  return data;
+}
+const say = (id, text, ok) => { $(id).textContent = text; $(id).className = "msg " + (ok ? "ok" : "err"); };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+async function load() {
+  rules = await call("/api/rules");
+  $("list").innerHTML = rules.length ? rules.map((r) => `
+    <div class="rule">
+      <div><span class="tag">${esc(r.keyword)}</span><span class="tag">${r.requireFollow ? "pide seguir" : "sin seguir"}</span><span class="tag">${r.active ? "activa" : "pausada"}</span><span class="tag">${r.sent || 0} enviados</span></div>
+      <div class="mut" style="margin-top:6px">${esc(r.permalink || r.mediaId)}</div>
+      <div style="margin:6px 0">${esc(r.message)}</div>
+      <div class="mut">${esc(r.link)}</div>
+      <div style="margin-top:8px" class="row">
+        <button class="sec small" onclick="edit('${r.id}')">Editar</button>
+        <button class="sec small" onclick="toggle('${r.id}')">${r.active ? "Pausar" : "Activar"}</button>
+        <button class="sec small" onclick="del('${r.id}')">Borrar</button>
+      </div>
+    </div>`).join("") : "Todavía no hay ninguna.";
+}
+
+$("save").onclick = async () => {
+  store.set("api", $("api").value.trim()); store.set("pwd", $("pwd").value);
+  try { const me = await call("/api/me"); await load(); say("connMsg", "Conectado como @" + (me.username || "?"), true); }
+  catch (e) { say("connMsg", e.message, false); }
+};
+
+$("resolve").onclick = async () => {
+  try {
+    resolved = await call("/api/resolve?url=" + encodeURIComponent($("url").value.trim()));
+    say("resolveMsg", "✔ Encontrado: " + (resolved.caption || resolved.permalink), true);
+  } catch (e) { resolved = null; say("resolveMsg", e.message, false); }
+};
+
+function reset() {
+  editing = null; resolved = null;
+  ["url","keyword","message","link","publicReply","intro","notFollowing"].forEach((i) => $(i).value = "");
+  $("buttonText").value = "Ya te sigo ✅"; $("follow").checked = true;
+  $("formTitle").textContent = "Nueva automatización"; $("cancel").style.display = "none";
+  $("resolveMsg").textContent = "";
+}
+$("cancel").onclick = reset;
+
+window.edit = (id) => {
+  const r = rules.find((x) => x.id === id); if (!r) return;
+  editing = r; resolved = { mediaId: r.mediaId, permalink: r.permalink };
+  $("url").value = r.permalink; $("keyword").value = r.keyword; $("message").value = r.message; $("link").value = r.link;
+  $("follow").checked = r.requireFollow; $("publicReply").value = r.publicReply; $("intro").value = r.introMessage;
+  $("buttonText").value = r.buttonText; $("notFollowing").value = r.notFollowingMessage;
+  $("formTitle").textContent = "Editando automatización"; $("cancel").style.display = ""; scrollTo({ top: 0, behavior: "smooth" });
+};
+window.toggle = async (id) => { const r = rules.find((x) => x.id === id); await call("/api/rules", { method: "POST", body: JSON.stringify({ ...r, active: !r.active }) }); load(); };
+window.del = async (id) => { if (confirm("¿Borrar esta automatización?")) { await call("/api/rules/" + id, { method: "DELETE" }); load(); } };
+
+$("add").onclick = async () => {
+  try {
+    if (!resolved) await $("resolve").onclick();
+    if (!resolved) throw new Error("Primero pulsa Buscar con la URL de un reel de tu cuenta");
+    await call("/api/rules", { method: "POST", body: JSON.stringify({
+      id: editing?.id, sent: editing?.sent, active: editing ? editing.active : true,
+      mediaId: resolved.mediaId, permalink: resolved.permalink,
+      keyword: $("keyword").value, message: $("message").value, link: $("link").value.trim(),
+      requireFollow: $("follow").checked, publicReply: $("publicReply").value, introMessage: $("intro").value,
+      buttonText: $("buttonText").value, notFollowingMessage: $("notFollowing").value,
+    }) });
+    say("addMsg", "✔ Guardada", true); reset(); load();
+  } catch (e) { say("addMsg", e.message, false); }
+};
+
+if ($("api").value && $("pwd").value) $("save").onclick();
+</script>
+</body>
+</html>
