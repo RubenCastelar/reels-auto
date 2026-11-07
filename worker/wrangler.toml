@@ -9,4 +9,4 @@ GRAPH_VERSION = "v23.0"
 # Después de `npx wrangler kv namespace create RULES`, pega aquí el id que te devuelve:
 [[kv_namespaces]]
 binding = "RULES"
-id = "PEGA_AQUI_EL_ID"
+id = "9a4c7ceb09ba4e6ba9698ed01f5c145c"
