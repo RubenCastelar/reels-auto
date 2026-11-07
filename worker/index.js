@@ -364,6 +364,10 @@ async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
+  if (url.pathname === "/api/lat" && request.method === "GET") {
+    return json((await env.RULES.get("lat", "json")) || []);
+  }
+
   if (url.pathname === "/api/pending" && request.method === "GET") {
     return json(await getPend(env));
   }
@@ -432,7 +436,18 @@ async function pollComments(env, rules) {
     for (const c of fresh) {
       seenComments.add(c.id);
       const from = c.from?.id ? c.from : { id: c.username, username: c.username };
+      const visto = Date.now();
       await handleComment(env, { id: c.id, text: c.text, from, media: { id: rule.mediaId } }).catch((e) => console.log("poll handle", e));
+      // Medición de retrasos (solo comentarios nuevos): publicado -> visto en la API -> respuesta enviada
+      try {
+        const lat = (await env.RULES.get("lat", "json")) || [];
+        lat.push({
+          usuario: c.username, publicado: c.timestamp,
+          vistoEnApi: new Date(visto).toISOString(), segundosHastaVerlo: Math.round((visto - Date.parse(c.timestamp)) / 1000),
+          enviado: new Date().toISOString(), segundosEnResponder: Math.round((Date.now() - visto) / 1000),
+        });
+        await env.RULES.put("lat", JSON.stringify(lat.slice(-10)));
+      } catch {}
     }
   }
 }
