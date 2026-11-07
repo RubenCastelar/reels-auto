@@ -114,7 +114,16 @@ async function handleComment(env, v) {
     await graph(env, `/${v.id}/replies`, { method: "POST", body: { message: rule.publicReply } });
   }
 
+  // Si ya te sigue, se le envía el contenido directamente (sin pedirle nada)
+  let yaSigue = false;
   if (rule.requireFollow) {
+    const pt = await pageToken(env);
+    const f = await graph(env, `/${v.from.id}`, { token: pt || undefined, params: { fields: "is_user_follow_business" } });
+    yaSigue = f.ok && f.data.is_user_follow_business === true;
+    console.log("ya sigue?", v.from.username || v.from.id, f.ok ? yaSigue : "no se pudo comprobar");
+  }
+
+  if (rule.requireFollow && !yaSigue) {
     const intro = rule.introMessage || "¡Hola! Para enviarte lo prometido, primero sígueme y luego pulsa el botón 👇";
     const btn = buttonMessage(intro, rule.buttonText || "Ya te sigo ✅", `FOLLOW:${rule.id}`);
     let r = await sendMsg(env, { comment_id: v.id }, btn);
@@ -156,7 +165,9 @@ async function deliverIfFollowing(env, senderId, ruleId, user = { id: senderId }
   console.log("seguimiento", senderId, JSON.stringify(p.data).slice(0, 200));
   if (!p.ok) {
     // No se pudo comprobar: no afirmamos que no te sigue; lo reintentamos en la siguiente respuesta
-    await sendMsg(env, { id: senderId }, { text: "No he podido comprobar si me sigues ahora mismo 🙏 Escríbeme otra vez en un momento." });
+    const retry = "No he podido comprobar si me sigues ahora mismo 🙏 Pulsa el botón en un momento.";
+    const sent = await sendMsg(env, { id: senderId }, buttonMessage(retry, rule.buttonText || "Ya te sigo ✅", `FOLLOW:${rule.id}`));
+    if (!sent.ok) await sendMsg(env, { id: senderId }, { text: retry });
     await setPending(env, user, rule.id);
     return;
   }
@@ -166,8 +177,9 @@ async function deliverIfFollowing(env, senderId, ruleId, user = { id: senderId }
     await clearPending(env, user);
     await bump(env, rule.id);
   } else {
-    const msg = rule.notFollowingMessage || "Todavía no veo que me sigas 🙈 Síguenos y escríbeme otra vez.";
-    await sendMsg(env, { id: senderId }, { text: msg });
+    const msg = rule.notFollowingMessage || "Todavía no veo que me sigas 🙈 Síguenos y pulsa el botón otra vez.";
+    const sent = await sendMsg(env, { id: senderId }, buttonMessage(msg, rule.buttonText || "Ya te sigo ✅", `FOLLOW:${rule.id}`));
+    if (!sent.ok) await sendMsg(env, { id: senderId }, { text: msg });
     await setPending(env, { id: senderId, username: p.data?.username || user.username }, rule.id); // espera su próxima respuesta
   }
 }
@@ -177,16 +189,23 @@ async function pollConversations(env) {
   const r = await graph(env, `/${env.IG_USER_ID}/conversations`, {
     params: { platform: "instagram", fields: "updated_time,participants,messages.limit(5){message,from,created_time}", limit: "25" },
   });
-  if (!r.ok) return;
-  for (const c of r.data.data || []) {
-    const other = (c.participants?.data || []).find((p) => p.id !== env.IG_USER_ID);
-    if (!other) continue;
-    const pend = await getPending(env, other);
-    if (!pend) continue;
-    const replied = (c.messages?.data || []).some((m) => m.from?.id !== env.IG_USER_ID && Date.parse(m.created_time) > pend.t);
-    if (!replied) continue;
-    await deliverIfFollowing(env, other.id, pend.ruleId, other).catch((e) => console.log("poll conv", e));
+  const info = { t: new Date().toISOString(), ok: r.ok, error: r.ok ? "" : String(r.data?.error?.message || "").slice(0, 150), convs: 0, pendientes: [], atendidos: [] };
+  if (r.ok) {
+    for (const c of r.data.data || []) {
+      info.convs++;
+      const other = (c.participants?.data || []).find((p) => p.id !== env.IG_USER_ID);
+      if (!other) continue;
+      const pend = await getPending(env, other);
+      if (!pend) continue;
+      const last = (c.messages?.data || []).filter((m) => m.from?.id !== env.IG_USER_ID).map((m) => m.created_time)[0] || "";
+      const replied = (c.messages?.data || []).some((m) => m.from?.id !== env.IG_USER_ID && Date.parse(m.created_time) > pend.t);
+      info.pendientes.push({ u: other.username, pendDesde: new Date(pend.t).toISOString(), ultimoMensajeUsuario: last, respondio: replied });
+      if (!replied) continue;
+      info.atendidos.push(other.username);
+      await deliverIfFollowing(env, other.id, pend.ruleId, other).catch((e) => console.log("poll conv", e));
+    }
   }
+  await env.RULES.put("pollinfo", JSON.stringify(info));
 }
 
 async function handleMessaging(env, m) {
@@ -323,6 +342,10 @@ async function handleApi(request, env, url) {
     if (!b.id || !b.ruleId) return json({ error: "Faltan id o ruleId" }, 400);
     await setPending(env, { id: String(b.id), username: b.username || "" }, b.ruleId);
     return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/pollinfo" && request.method === "GET") {
+    return json((await env.RULES.get("pollinfo", "json")) || {});
   }
 
   if (url.pathname === "/api/debug" && request.method === "GET") {
