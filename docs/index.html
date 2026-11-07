@@ -27,13 +27,24 @@
   .tag { display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12px; margin-right:6px; }
   .mut { color:var(--mut); font-size:13px; word-break:break-all; }
   details summary { cursor:pointer; color:var(--mut); font-size:13px; margin-top:12px; }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .tabs button { background:transparent; color:var(--tx); border:1px solid var(--line); }
+  .tabs button.on { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .hidden { display:none; }
+  #search { margin-bottom:8px; }
 </style>
 </head>
 <body>
 <main>
   <h1>🎬 Reels Auto</h1>
 
-  <div class="card" id="conn">
+  <div class="tabs">
+    <button id="tabListBtn" class="on">📋 Mis automatizaciones <span id="count"></span></button>
+    <button id="tabNewBtn">➕ Nueva automatización</button>
+    <button id="tabConnBtn" class="sec">⚙ Conexión</button>
+  </div>
+
+  <div class="card hidden" id="conn">
     <h2>Conexión</h2>
     <label>URL de tu Worker</label>
     <input type="text" id="api" placeholder="https://reels-auto.TU-USUARIO.workers.dev">
@@ -43,7 +54,7 @@
     <div class="msg" id="connMsg"></div>
   </div>
 
-  <div class="card">
+  <div class="card hidden" id="tabNew">
     <h2 id="formTitle">Nueva automatización</h2>
     <label>URL del reel</label>
     <div class="row">
@@ -82,9 +93,10 @@
     <div class="msg" id="addMsg"></div>
   </div>
 
-  <div class="card">
-    <h2>Automatizaciones activas</h2>
-    <div id="list" class="mut">Conecta arriba para ver tus automatizaciones.</div>
+  <div class="card" id="tabList">
+    <h2>Mis automatizaciones</h2>
+    <input type="text" id="search" placeholder="Buscar por palabra, mensaje o enlace…" class="hidden">
+    <div id="list" class="mut">Pulsa «⚙ Conexión» para conectar y ver tus automatizaciones.</div>
   </div>
 </main>
 
@@ -107,12 +119,35 @@ async function call(path, opts = {}) {
 const say = (id, text, ok) => { $(id).textContent = text; $(id).className = "msg " + (ok ? "ok" : "err"); };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 
+function show(tab) {
+  $("tabList").classList.toggle("hidden", tab !== "list");
+  $("tabNew").classList.toggle("hidden", tab !== "new");
+  $("conn").classList.toggle("hidden", tab !== "conn");
+  $("tabListBtn").classList.toggle("on", tab === "list");
+  $("tabNewBtn").classList.toggle("on", tab === "new");
+  $("tabConnBtn").classList.toggle("on", tab === "conn");
+}
+$("tabListBtn").onclick = () => { show("list"); if (!rules.length) load().catch(() => {}); };
+$("tabNewBtn").onclick = () => show("new");
+$("tabConnBtn").onclick = () => show("conn");
+
 async function load() {
   rules = await call("/api/rules");
-  $("list").innerHTML = rules.length ? rules.map((r) => `
+  render();
+}
+$("search").oninput = () => render();
+
+function render() {
+  const total = rules.length, activas = rules.filter((r) => r.active).length;
+  $("count").textContent = total ? `(${total})` : "";
+  $("search").classList.toggle("hidden", total < 4);
+  const q = $("search").value.trim().toLowerCase();
+  const shown = q ? rules.filter((r) => [r.keyword, r.message, r.link, r.permalink].join(" ").toLowerCase().includes(q)) : rules;
+  const summary = total ? `<div class="mut" style="margin-bottom:8px">${total} en total · ${activas} activas · ${rules.reduce((n, r) => n + (r.sent || 0), 0)} mensajes enviados</div>` : "";
+  $("list").innerHTML = summary + (shown.length ? shown.map((r) => `
     <div class="rule">
       <div><span class="tag">${esc(r.keyword)}</span><span class="tag">${r.requireFollow ? "pide seguir" : "sin seguir"}</span><span class="tag">${r.active ? "activa" : "pausada"}</span><span class="tag">${r.sent || 0} enviados</span></div>
-      <div class="mut" style="margin-top:6px">${esc(r.permalink || r.mediaId)}</div>
+      <div class="mut" style="margin-top:6px"><a href="${esc(r.permalink)}" target="_blank" rel="noopener">${esc(r.permalink || r.mediaId)}</a></div>
       <div style="margin:6px 0">${esc(r.message)}</div>
       <div class="mut">${esc(r.link)}</div>
       <div style="margin-top:8px" class="row">
@@ -120,13 +155,13 @@ async function load() {
         <button class="sec small" onclick="toggle('${r.id}')">${r.active ? "Pausar" : "Activar"}</button>
         <button class="sec small" onclick="del('${r.id}')">Borrar</button>
       </div>
-    </div>`).join("") : "Todavía no hay ninguna.";
+    </div>`).join("") : (total ? "Ninguna coincide con la búsqueda." : "Todavía no hay ninguna. Crea la primera en «➕ Nueva automatización»."));
 }
 
 $("save").onclick = async () => {
   store.set("api", $("api").value.trim()); store.set("pwd", $("pwd").value);
-  try { const me = await call("/api/me"); await load(); say("connMsg", "Conectado como @" + (me.username || "?"), true); }
-  catch (e) { say("connMsg", e.message, false); }
+  try { const me = await call("/api/me"); await load(); say("connMsg", "Conectado como @" + (me.username || "?"), true); show("list"); }
+  catch (e) { say("connMsg", e.message, false); show("conn"); }
 };
 
 $("resolve").onclick = async () => {
@@ -143,7 +178,7 @@ function reset() {
   $("formTitle").textContent = "Nueva automatización"; $("cancel").style.display = "none";
   $("resolveMsg").textContent = "";
 }
-$("cancel").onclick = reset;
+$("cancel").onclick = () => { reset(); show("list"); };
 
 window.edit = (id) => {
   const r = rules.find((x) => x.id === id); if (!r) return;
@@ -151,7 +186,7 @@ window.edit = (id) => {
   $("url").value = r.permalink; $("keyword").value = r.keyword; $("message").value = r.message; $("link").value = r.link;
   $("follow").checked = r.requireFollow; $("publicReply").value = r.publicReply; $("intro").value = r.introMessage;
   $("buttonText").value = r.buttonText; $("notFollowing").value = r.notFollowingMessage;
-  $("formTitle").textContent = "Editando automatización"; $("cancel").style.display = ""; scrollTo({ top: 0, behavior: "smooth" });
+  $("formTitle").textContent = "Editando automatización"; $("cancel").style.display = ""; show("new"); scrollTo({ top: 0, behavior: "smooth" });
 };
 window.toggle = async (id) => { const r = rules.find((x) => x.id === id); await call("/api/rules", { method: "POST", body: JSON.stringify({ ...r, active: !r.active }) }); load(); };
 window.del = async (id) => { if (confirm("¿Borrar esta automatización?")) { await call("/api/rules/" + id, { method: "DELETE" }); load(); } };
@@ -167,11 +202,11 @@ $("add").onclick = async () => {
       requireFollow: $("follow").checked, publicReply: $("publicReply").value, introMessage: $("intro").value,
       buttonText: $("buttonText").value, notFollowingMessage: $("notFollowing").value,
     }) });
-    say("addMsg", "✔ Guardada", true); reset(); load();
+    say("addMsg", "✔ Guardada", true); reset(); await load(); show("list");
   } catch (e) { say("addMsg", e.message, false); }
 };
 
-if ($("api").value && $("pwd").value) $("save").onclick();
+if ($("api").value && $("pwd").value) $("save").onclick(); else show("conn");
 </script>
 </body>
 </html>

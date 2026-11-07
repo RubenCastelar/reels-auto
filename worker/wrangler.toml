@@ -3,7 +3,7 @@ main = "index.js"
 compatibility_date = "2025-01-01"
 
 [vars]
-GRAPH_HOST = "graph.instagram.com"
+GRAPH_HOST = "graph.facebook.com"
 GRAPH_VERSION = "v23.0"
 
 # Después de `npx wrangler kv namespace create RULES`, pega aquí el id que te devuelve:
